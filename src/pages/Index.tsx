@@ -2,18 +2,31 @@ import { useState } from "react";
 import { FileUpload } from "@/components/FileUpload";
 import { LanguageSelect } from "@/components/LanguageSelect";
 import { Button } from "@/components/ui/button";
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
 
 const Index = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [selectedLanguage, setSelectedLanguage] = useState<string>("");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isUploaded, setIsUploaded] = useState(false);
   const { toast } = useToast();
 
-  const handleFileSelect = (file: File) => {
-    console.log("File selected:", file.name);
+  const handleFileSelect = (file: File | null) => {
+    console.log("File selected:", file?.name);
     setSelectedFile(file);
+  };
+
+  const handleUploadSuccess = () => {
+    console.log("Upload completed successfully");
+    setIsUploaded(true);
+  };
+
+  const handleReset = () => {
+    console.log("Resetting form");
+    setSelectedFile(null);
+    setIsUploaded(false);
+    setSelectedLanguage("");
   };
 
   const handleLanguageSelect = (language: string) => {
@@ -66,23 +79,31 @@ const Index = () => {
           </p>
         </div>
 
-        <FileUpload onFileSelect={handleFileSelect} />
+        <FileUpload 
+          onFileSelect={handleFileSelect}
+          onUploadSuccess={handleUploadSuccess}
+          onReset={handleReset}
+        />
 
         <div className="space-y-4">
-          <LanguageSelect onLanguageSelect={handleLanguageSelect} />
+          <LanguageSelect 
+            onLanguageSelect={handleLanguageSelect}
+          />
 
           <Button
             onClick={handleProcess}
-            disabled={!selectedFile || !selectedLanguage || isProcessing}
-            className="w-full bg-medical-bright hover:bg-medical-sky text-white"
+            disabled={!isUploaded || !selectedLanguage || isProcessing}
+            className="w-full bg-medical-bright hover:bg-medical-sky text-white transition-colors"
           >
             {isProcessing ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Processing...
               </>
+            ) : isUploaded ? (
+              "Analyze Report"
             ) : (
-              "Process Report"
+              "Upload Report"
             )}
           </Button>
         </div>
