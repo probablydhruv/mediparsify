@@ -1,6 +1,11 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
-import { TextractClient, AnalyzeDocumentCommand } from "npm:@aws-sdk/client-textract";
+import { 
+  TextractClient, 
+  StartDocumentAnalysisCommand,
+  GetDocumentAnalysisCommand,
+  StartDocumentAnalysisCommandInput
+} from "npm:@aws-sdk/client-textract";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -8,7 +13,6 @@ const corsHeaders = {
 }
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
   }
@@ -55,13 +59,7 @@ serve(async (req) => {
 
     console.log('File downloaded successfully, size:', fileBytes.size)
 
-    // Convert blob to ArrayBuffer and then to Uint8Array
-    const arrayBuffer = await fileBytes.arrayBuffer()
-    const documentBytes = new Uint8Array(arrayBuffer)
-
-    console.log('Document bytes prepared, size:', documentBytes.length)
-
-    // Initialize AWS Textract client with explicit region
+    // Initialize AWS Textract client
     const textract = new TextractClient({
       region: "us-east-1",
       credentials: {
@@ -72,69 +70,88 @@ serve(async (req) => {
 
     console.log('AWS Textract client initialized')
 
-    // Create Textract command with proper configuration for PDF
-    const command = new AnalyzeDocumentCommand({
-      Document: {
-        Bytes: documentBytes
+    // Convert blob to ArrayBuffer and then to Uint8Array
+    const arrayBuffer = await fileBytes.arrayBuffer()
+    const documentBytes = new Uint8Array(arrayBuffer)
+
+    // Start asynchronous document analysis
+    const startAnalysisInput: StartDocumentAnalysisCommandInput = {
+      DocumentLocation: {
+        S3Object: {
+          Bucket: 'temp_pdfs',
+          Name: fileData.file_path
+        }
       },
-      FeatureTypes: ['FORMS', 'TABLES'],
-    });
+      FeatureTypes: ['FORMS', 'TABLES']
+    };
 
-    console.log('Sending document to Textract for analysis with features:', command.input.FeatureTypes)
-    
-    // Process document with Textract
-    const response = await textract.send(command)
-    
-    console.log('Received response from Textract:', {
-      blocksCount: response.Blocks?.length ?? 0,
-      hasBlocks: !!response.Blocks?.length,
-      blockTypes: response.Blocks?.map(b => b.BlockType).filter((v, i, a) => a.indexOf(v) === i)
-    })
+    console.log('Starting document analysis with input:', startAnalysisInput)
 
-    // Extract text from blocks with improved handling
-    let extractedText = '';
-    let currentTable = [];
-    let isInTable = false;
-    
-    response.Blocks?.forEach((block, index) => {
-      if (block.BlockType === 'TABLE') {
-        isInTable = true;
-        if (currentTable.length > 0) {
-          extractedText += currentTable.join('\t') + '\n';
-          currentTable = [];
-        }
-      } else if (block.BlockType === 'CELL' && isInTable) {
-        currentTable.push(block.Text || '');
-        if (block.RowIndex === 1 && block.ColumnIndex === 1) {
-          extractedText += '\nTable:\n';
-        }
-        if (block.ColumnIndex === block.ColumnSpan) {
-          extractedText += currentTable.join('\t') + '\n';
-          currentTable = [];
-        }
-      } else if (block.BlockType === 'LINE') {
-        if (isInTable) {
-          isInTable = false;
-          if (currentTable.length > 0) {
-            extractedText += currentTable.join('\t') + '\n';
-            currentTable = [];
-          }
-          extractedText += '\n';
-        }
-        extractedText += (block.Text || '') + '\n';
-      }
-    });
+    const startCommand = new StartDocumentAnalysisCommand(startAnalysisInput);
+    const startResponse = await textract.send(startCommand);
 
-    // Add any remaining table content
-    if (currentTable.length > 0) {
-      extractedText += currentTable.join('\t') + '\n';
+    if (!startResponse.JobId) {
+      throw new Error('Failed to start document analysis');
     }
 
-    console.log('Text extraction completed:', {
-      textLength: extractedText.length,
-      firstFewChars: extractedText.substring(0, 100),
-      tableCount: response.Blocks?.filter(b => b.BlockType === 'TABLE').length ?? 0
-    })
+    console.log('Analysis started with JobId:', startResponse.JobId);
+
+    // Poll for completion (with timeout)
+    const maxAttempts = 30;
+    let attempts = 0;
+    let extractedText = '';
+
+    while (attempts < maxAttempts) {
+      const getCommand = new GetDocumentAnalysisCommand({
+        JobId: startResponse.JobId
+      });
+
+      const getResponse = await textract.send(getCommand);
+      console.log('Job status:', getResponse.JobStatus);
+
+      if (getResponse.JobStatus === 'SUCCEEDED') {
+        // Process blocks similar to before, but handle pagination
+        let blocks = getResponse.Blocks || [];
+        
+        blocks.forEach((block) => {
+          if (block.BlockType === 'LINE') {
+            extractedText += (block.Text || '') + '\n';
+          } else if (block.BlockType === 'CELL') {
+            extractedText += (block.Text || '') + '\t';
+          }
+        });
+
+        // Handle pagination if NextToken exists
+        while (getResponse.NextToken) {
+          const nextPageCommand = new GetDocumentAnalysisCommand({
+            JobId: startResponse.JobId,
+            NextToken: getResponse.NextToken
+          });
+          const nextPageResponse = await textract.send(nextPageCommand);
+          nextPageResponse.Blocks?.forEach((block) => {
+            if (block.BlockType === 'LINE') {
+              extractedText += (block.Text || '') + '\n';
+            } else if (block.BlockType === 'CELL') {
+              extractedText += (block.Text || '') + '\t';
+            }
+          });
+        }
+
+        break;
+      } else if (getResponse.JobStatus === 'FAILED') {
+        throw new Error('Document analysis failed');
+      }
+
+      // Wait before next attempt
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      attempts++;
+    }
+
+    if (attempts >= maxAttempts) {
+      throw new Error('Document analysis timed out');
+    }
+
+    console.log('Text extraction completed successfully');
 
     return new Response(
       JSON.stringify({ text: extractedText }),
