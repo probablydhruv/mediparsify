@@ -35,6 +35,12 @@ serve(async (req) => {
       throw new Error('File not found')
     }
 
+    console.log('File data retrieved:', {
+      filename: fileData.filename,
+      path: fileData.file_path,
+      size: fileData.size
+    })
+
     // Get the file from storage
     const { data: fileBytes, error: downloadError } = await supabaseAdmin
       .storage
@@ -46,6 +52,8 @@ serve(async (req) => {
       throw new Error('Could not download file')
     }
 
+    console.log('File downloaded successfully, size:', fileBytes.size)
+
     // Initialize AWS Textract client
     const textract = new TextractClient({
       region: "us-east-1",
@@ -55,8 +63,11 @@ serve(async (req) => {
       },
     });
 
+    console.log('AWS Textract client initialized')
+
     // Convert file to buffer for Textract
     const buffer = await fileBytes.arrayBuffer()
+    console.log('File converted to buffer, size:', buffer.byteLength)
 
     // Create Textract command
     const command = new AnalyzeDocumentCommand({
@@ -68,7 +79,9 @@ serve(async (req) => {
 
     console.log('Sending document to Textract...')
     const response = await textract.send(command)
-    console.log('Received response from Textract')
+    console.log('Received response from Textract:', {
+      blocksCount: response.Blocks?.length ?? 0
+    })
 
     // Extract text from blocks
     const extractedText = response.Blocks?.filter(block => block.Text)
@@ -82,10 +95,26 @@ serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   } catch (error) {
-    console.error('Error in extract-text function:', error)
+    console.error('Detailed error in extract-text function:', {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+      cause: error.cause
+    })
+
     return new Response(
-      JSON.stringify({ error: error.message }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      JSON.stringify({ 
+        error: error.message,
+        details: {
+          name: error.name,
+          message: error.message,
+          cause: error.cause
+        }
+      }),
+      { 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }, 
+        status: 500 
+      }
     )
   }
 })
