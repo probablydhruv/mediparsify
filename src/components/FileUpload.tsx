@@ -8,7 +8,7 @@ import { Progress } from "@/components/ui/progress";
 
 interface FileUploadProps {
   onFileSelect: (file: File | null) => void;
-  onUploadSuccess: () => void;
+  onUploadSuccess: (fileId: string) => void;
   onReset: () => void;
 }
 
@@ -55,20 +55,22 @@ export const FileUpload = ({ onFileSelect, onUploadSuccess, onReset }: FileUploa
       console.log("File uploaded successfully, creating database record");
 
       // Create database record
-      const { error: dbError } = await supabase
+      const { data: fileRecord, error: dbError } = await supabase
         .from('uploaded_files')
         .insert({
           filename: file.name,
           file_path: filePath,
           content_type: file.type,
           size: file.size
-        });
+        })
+        .select()
+        .single();
 
       if (dbError) throw dbError;
 
       setUploadState('success');
       setUploadProgress(100);
-      onUploadSuccess();
+      onUploadSuccess(fileRecord.id);
       toast({
         title: "Upload Successful",
         description: "Your file has been uploaded successfully.",

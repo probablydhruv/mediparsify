@@ -4,22 +4,27 @@ import { LanguageSelect } from "@/components/LanguageSelect";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 const Index = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [selectedLanguage, setSelectedLanguage] = useState<string>("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [isUploaded, setIsUploaded] = useState(false);
+  const [extractedText, setExtractedText] = useState<string>("");
+  const [fileId, setFileId] = useState<string>("");
   const { toast } = useToast();
 
   const handleFileSelect = (file: File | null) => {
     console.log("File selected:", file?.name);
     setSelectedFile(file);
+    setExtractedText("");
   };
 
-  const handleUploadSuccess = () => {
-    console.log("Upload completed successfully");
+  const handleUploadSuccess = (id: string) => {
+    console.log("Upload completed successfully with ID:", id);
     setIsUploaded(true);
+    setFileId(id);
   };
 
   const handleReset = () => {
@@ -27,6 +32,8 @@ const Index = () => {
     setSelectedFile(null);
     setIsUploaded(false);
     setSelectedLanguage("");
+    setExtractedText("");
+    setFileId("");
   };
 
   const handleLanguageSelect = (language: string) => {
@@ -35,31 +42,37 @@ const Index = () => {
   };
 
   const handleProcess = async () => {
-    if (!selectedFile || !selectedLanguage) {
+    if (!fileId) {
       toast({
-        title: "Missing Information",
-        description: "Please select both a file and language before processing.",
+        title: "Error",
+        description: "No file selected for processing",
         variant: "destructive",
       });
       return;
     }
 
     setIsProcessing(true);
-    console.log("Processing file:", selectedFile.name, "in language:", selectedLanguage);
+    console.log("Processing file ID:", fileId);
 
     try {
-      // Simulating processing time
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      const { data, error } = await supabase.functions.invoke('extract-text', {
+        body: { fileId }
+      });
+
+      if (error) throw error;
+
+      console.log("Text extraction successful");
+      setExtractedText(data.text);
       
       toast({
         title: "Success!",
-        description: "Your prescription has been processed successfully.",
+        description: "Text extracted successfully.",
       });
     } catch (error) {
-      console.error("Processing error:", error);
+      console.error("Text extraction error:", error);
       toast({
         title: "Processing Failed",
-        description: "There was an error processing your prescription. Please try again.",
+        description: "Failed to extract text from the document. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -98,15 +111,25 @@ const Index = () => {
             {isProcessing ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Processing...
+                Extracting Text...
               </>
             ) : isUploaded ? (
-              "Analyze Report"
+              "Process Report"
             ) : (
               "Upload Report"
             )}
           </Button>
         </div>
+
+        {/* Temporary text display for testing */}
+        {extractedText && (
+          <div className="mt-8 p-4 bg-gray-50 rounded-lg">
+            <h3 className="text-lg font-semibold mb-2">Extracted Text (Testing Only):</h3>
+            <pre className="whitespace-pre-wrap text-sm text-gray-700">
+              {extractedText}
+            </pre>
+          </div>
+        )}
       </div>
     </div>
   );
