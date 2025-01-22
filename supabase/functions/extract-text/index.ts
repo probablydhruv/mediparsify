@@ -80,22 +80,35 @@ serve(async (req) => {
       FeatureTypes: ['FORMS', 'TABLES']
     });
 
-    console.log('Sending document to Textract...')
+    console.log('Sending document to Textract for analysis...')
     
     // Process document with Textract
     const response = await textract.send(command)
     
     console.log('Received response from Textract:', {
-      blocksCount: response.Blocks?.length ?? 0
+      blocksCount: response.Blocks?.length ?? 0,
+      hasBlocks: !!response.Blocks?.length,
+      firstBlockType: response.Blocks?.[0]?.BlockType
     })
 
     // Extract text from blocks
-    const extractedText = response.Blocks
-      ?.filter(block => block.Text)
-      .map(block => block.Text)
-      .join('\n') ?? '';
+    let extractedText = '';
+    
+    // Process each block based on its type
+    response.Blocks?.forEach(block => {
+      if (block.BlockType === 'LINE' && block.Text) {
+        extractedText += block.Text + '\n';
+      } else if (block.BlockType === 'WORD' && block.Text) {
+        extractedText += block.Text + ' ';
+      } else if (block.BlockType === 'CELL' && block.Text) {
+        extractedText += block.Text + '\t';
+      }
+    });
 
-    console.log('Text extraction completed, length:', extractedText.length)
+    console.log('Text extraction completed:', {
+      textLength: extractedText.length,
+      firstFewChars: extractedText.substring(0, 100)
+    })
 
     return new Response(
       JSON.stringify({ text: extractedText }),
