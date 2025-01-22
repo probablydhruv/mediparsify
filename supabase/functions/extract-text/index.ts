@@ -1,7 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 import { TextractClient, AnalyzeDocumentCommand } from "npm:@aws-sdk/client-textract";
-import * as pdfjs from 'npm:pdfjs-dist';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -39,7 +38,8 @@ serve(async (req) => {
     console.log('File data retrieved:', {
       filename: fileData.filename,
       path: fileData.file_path,
-      size: fileData.size
+      size: fileData.size,
+      contentType: fileData.content_type
     })
 
     // Get the file from storage
@@ -55,11 +55,11 @@ serve(async (req) => {
 
     console.log('File downloaded successfully, size:', fileBytes.size)
 
-    // Convert PDF to images
-    const pdfData = new Uint8Array(await fileBytes.arrayBuffer());
-    const loadingTask = pdfjs.getDocument({ data: pdfData });
-    const pdf = await loadingTask.promise;
-    console.log('PDF loaded, pages:', pdf.numPages);
+    // Convert blob to ArrayBuffer and then to Uint8Array
+    const arrayBuffer = await fileBytes.arrayBuffer()
+    const pdfBytes = new Uint8Array(arrayBuffer)
+
+    console.log('PDF bytes prepared, size:', pdfBytes.length)
 
     // Initialize AWS Textract client
     const textract = new TextractClient({
@@ -70,57 +70,35 @@ serve(async (req) => {
       },
     });
 
-    console.log('AWS Textract client initialized');
+    console.log('AWS Textract client initialized')
 
-    let allText = [];
+    // Create Textract command with PDF bytes
+    const command = new AnalyzeDocumentCommand({
+      Document: {
+        Bytes: pdfBytes
+      },
+      FeatureTypes: ['FORMS', 'TABLES']
+    });
 
-    // Process each page
-    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-      console.log(`Processing page ${pageNum}`);
-      const page = await pdf.getPage(pageNum);
-      const viewport = page.getViewport({ scale: 2.0 });
+    console.log('Sending document to Textract...')
+    
+    // Process document with Textract
+    const response = await textract.send(command)
+    
+    console.log('Received response from Textract:', {
+      blocksCount: response.Blocks?.length ?? 0
+    })
 
-      // Create canvas and context
-      const canvas = new OffscreenCanvas(viewport.width, viewport.height);
-      const context = canvas.getContext('2d');
-      
-      // Render PDF page to canvas
-      await page.render({
-        canvasContext: context,
-        viewport: viewport
-      }).promise;
+    // Extract text from blocks
+    const extractedText = response.Blocks
+      ?.filter(block => block.Text)
+      .map(block => block.Text)
+      .join('\n') ?? '';
 
-      // Convert canvas to PNG
-      const imageBlob = await canvas.convertToBlob({ type: 'image/png' });
-      const imageBuffer = await imageBlob.arrayBuffer();
-
-      // Send to Textract
-      const command = new AnalyzeDocumentCommand({
-        Document: {
-          Bytes: new Uint8Array(imageBuffer)
-        },
-        FeatureTypes: ['FORMS', 'TABLES']
-      });
-
-      console.log(`Sending page ${pageNum} to Textract...`);
-      const response = await textract.send(command);
-      console.log(`Received response from Textract for page ${pageNum}:`, {
-        blocksCount: response.Blocks?.length ?? 0
-      });
-
-      // Extract text from blocks
-      const pageText = response.Blocks?.filter(block => block.Text)
-        .map(block => block.Text)
-        .join('\n') ?? '';
-
-      allText.push(pageText);
-    }
-
-    // Combine text from all pages
-    const finalText = allText.join('\n\n=== Page Break ===\n\n');
+    console.log('Text extraction completed, length:', extractedText.length)
 
     return new Response(
-      JSON.stringify({ text: finalText }),
+      JSON.stringify({ text: extractedText }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   } catch (error) {
