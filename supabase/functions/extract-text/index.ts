@@ -2,14 +2,12 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 import { 
   S3Client,
+  GetObjectCommand,
   PutObjectCommand,
-  ListBucketsCommand,
-  GetObjectCommand
 } from "npm:@aws-sdk/client-s3"
 import { 
   TextractClient, 
-  DetectDocumentTextCommand,
-  AnalyzeDocumentCommand
+  AnalyzeDocumentCommand,
 } from "npm:@aws-sdk/client-textract"
 
 const corsHeaders = {
@@ -24,7 +22,14 @@ serve(async (req) => {
   }
 
   try {
-    // Initialize AWS clients with explicit logging
+    const { fileId } = await req.json()
+    console.log("Processing file ID:", fileId)
+
+    if (!fileId) {
+      throw new Error('No fileId provided')
+    }
+
+    // Initialize clients
     console.log("Initializing AWS clients...")
     const s3Client = new S3Client({
       region: Deno.env.get('AWS_REGION') ?? 'ap-south-1',
@@ -41,24 +46,6 @@ serve(async (req) => {
         secretAccessKey: Deno.env.get('AWS_SECRET_ACCESS_KEY') ?? '',
       },
     })
-
-    // Test S3 access
-    console.log("Testing S3 access by listing buckets...")
-    try {
-      const listBucketsCommand = new ListBucketsCommand({})
-      const listBucketsResponse = await s3Client.send(listBucketsCommand)
-      console.log('S3 Buckets found:', listBucketsResponse.Buckets?.map(b => b.Name))
-    } catch (s3Error) {
-      console.error('S3 access test failed:', s3Error)
-      throw new Error(`S3 access failed: ${s3Error.message}`)
-    }
-
-    // Get the fileId from request
-    const { fileId } = await req.json()
-    if (!fileId) {
-      throw new Error('No fileId provided')
-    }
-    console.log("Processing file ID:", fileId)
 
     // Initialize Supabase client
     const supabaseAdmin = createClient(
@@ -97,39 +84,20 @@ serve(async (req) => {
       throw new Error('Could not download file from Supabase storage')
     }
 
-    // Upload to S3
-    console.log("Uploading file to S3...")
-    const s3Key = `uploads/${fileData.file_path}`
+    // Convert file to buffer
+    const buffer = await fileBytes.arrayBuffer()
     
-    try {
-      const arrayBuffer = await fileBytes.arrayBuffer()
-      const uploadCommand = new PutObjectCommand({
-        Bucket: 'textract-console-ap-south-1-a4d70d93-f44b-4cfe-abf7-9f1e5c7cf6b',
-        Key: s3Key,
-        Body: new Uint8Array(arrayBuffer),
-        ContentType: fileData.content_type,
-      })
-
-      await s3Client.send(uploadCommand)
-      console.log('File successfully uploaded to S3:', s3Key)
-    } catch (s3Error) {
-      console.error('S3 upload error:', s3Error)
-      throw new Error(`Failed to upload file to S3: ${s3Error.message}`)
-    }
-
-    // Process with Textract
+    // Process with Textract directly using the buffer
     console.log("Processing with Textract...")
     try {
       const analyzeCommand = new AnalyzeDocumentCommand({
         Document: {
-          S3Object: {
-            Bucket: 'textract-console-ap-south-1-a4d70d93-f44b-4cfe-abf7-9f1e5c7cf6b',
-            Name: s3Key
-          }
+          Bytes: new Uint8Array(buffer)
         },
         FeatureTypes: ['FORMS', 'TABLES']
       })
 
+      console.log("Sending document to Textract...")
       const analyzeResponse = await textract.send(analyzeCommand)
       console.log('Textract analysis successful')
 
