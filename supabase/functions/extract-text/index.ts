@@ -24,8 +24,6 @@ serve(async (req) => {
   }
 
   try {
-    console.log("Starting AWS service verification...")
-
     // Initialize AWS clients with explicit logging
     console.log("Initializing AWS clients...")
     const s3Client = new S3Client({
@@ -57,6 +55,9 @@ serve(async (req) => {
 
     // Get the fileId from request
     const { fileId } = await req.json()
+    if (!fileId) {
+      throw new Error('No fileId provided')
+    }
     console.log("Processing file ID:", fileId)
 
     // Initialize Supabase client
@@ -75,7 +76,7 @@ serve(async (req) => {
 
     if (fileError || !fileData) {
       console.error('Error fetching file details:', fileError)
-      throw new Error('File not found')
+      throw new Error('File not found in database')
     }
 
     console.log("File metadata retrieved:", {
@@ -116,8 +117,8 @@ serve(async (req) => {
       throw new Error(`Failed to upload file to S3: ${s3Error.message}`)
     }
 
-    // Test Textract
-    console.log("Testing Textract with uploaded document...")
+    // Process with Textract
+    console.log("Processing with Textract...")
     try {
       const analyzeCommand = new AnalyzeDocumentCommand({
         Document: {
