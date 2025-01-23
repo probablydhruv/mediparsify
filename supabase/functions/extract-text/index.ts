@@ -2,8 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 import { 
   TextractClient, 
-  StartDocumentAnalysisCommand,
-  GetDocumentAnalysisCommand,
+  AnalyzeDocumentCommand,
 } from "npm:@aws-sdk/client-textract"
 
 const corsHeaders = {
@@ -11,11 +10,16 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB in bytes
+
 serve(async (req) => {
   // Handle CORS
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
   }
+
+  const startTime = new Date();
+  console.log(`Processing started at: ${startTime.toISOString()}`);
 
   try {
     const { fileId } = await req.json()
@@ -42,6 +46,12 @@ serve(async (req) => {
     if (fileError || !fileData) {
       console.error('Error fetching file details:', fileError)
       throw new Error('File not found in database')
+    }
+
+    // Check file size
+    console.log(`File size: ${fileData.size} bytes`);
+    if (fileData.size > MAX_FILE_SIZE) {
+      throw new Error(`File size exceeds maximum limit of ${MAX_FILE_SIZE / (1024 * 1024)}MB`);
     }
 
     console.log("File metadata retrieved:", {
@@ -75,90 +85,62 @@ serve(async (req) => {
       },
     })
 
-    // Start asynchronous document analysis
-    console.log("Starting document analysis with Textract...")
-    try {
-      const startCommand = new StartDocumentAnalysisCommand({
-        DocumentLocation: {
-          Bytes: new Uint8Array(buffer)
-        },
-        FeatureTypes: ['FORMS', 'TABLES']
-      })
+    // Process document with Textract
+    console.log("Sending document to Textract for analysis...")
+    const command = new AnalyzeDocumentCommand({
+      Document: {
+        Bytes: new Uint8Array(buffer)
+      },
+      FeatureTypes: ['FORMS', 'TABLES']
+    })
 
-      console.log("Sending document to Textract...")
-      const startResponse = await textract.send(startCommand)
-      
-      if (!startResponse.JobId) {
-        throw new Error('No JobId received from Textract')
+    const response = await textract.send(command)
+    
+    // Extract text and analyze document properties
+    let extractedText = ''
+    let pageCount = 0
+    const pageNumbers = new Set()
+
+    response.Blocks?.forEach((block) => {
+      if (block.BlockType === 'LINE') {
+        extractedText += (block.Text || '') + '\n'
       }
-
-      console.log("Analysis started with JobId:", startResponse.JobId)
-
-      // Poll for results
-      let analysisComplete = false
-      let maxAttempts = 30 // Maximum number of polling attempts
-      let attempts = 0
-      let extractedText = ''
-
-      while (!analysisComplete && attempts < maxAttempts) {
-        console.log(`Polling attempt ${attempts + 1} of ${maxAttempts}...`)
-        
-        const getResultsCommand = new GetDocumentAnalysisCommand({
-          JobId: startResponse.JobId
-        })
-
-        const analysisResponse = await textract.send(getResultsCommand)
-        
-        if (analysisResponse.JobStatus === 'SUCCEEDED') {
-          console.log("Analysis completed successfully")
-          analysisComplete = true
-          
-          // Extract text from blocks
-          analysisResponse.Blocks?.forEach((block) => {
-            if (block.BlockType === 'LINE') {
-              extractedText += (block.Text || '') + '\n'
-            }
-          })
-        } else if (analysisResponse.JobStatus === 'FAILED') {
-          throw new Error(`Analysis failed: ${analysisResponse.StatusMessage}`)
-        }
-
-        if (!analysisComplete) {
-          attempts++
-          await new Promise(resolve => setTimeout(resolve, 1000)) // Wait 1 second before next poll
-        }
+      if (block.Page) {
+        pageNumbers.add(block.Page)
       }
+    })
 
-      if (!analysisComplete) {
-        throw new Error('Document analysis timed out')
+    pageCount = pageNumbers.size
+    console.log(`Number of pages detected: ${pageCount}`);
+
+    const endTime = new Date();
+    const processingTime = endTime.getTime() - startTime.getTime();
+    console.log(`Processing completed at: ${endTime.toISOString()}`);
+    console.log(`Total processing time: ${processingTime}ms`);
+
+    return new Response(
+      JSON.stringify({ 
+        text: extractedText,
+        pageCount,
+        processingTimeMs: processingTime,
+        message: "Processing completed successfully" 
+      }),
+      { 
+        headers: { 
+          ...corsHeaders,
+          'Content-Type': 'application/json'
+        } 
       }
-
-      console.log('Text extraction completed successfully')
-      
-      return new Response(
-        JSON.stringify({ 
-          text: extractedText,
-          message: "Processing completed successfully" 
-        }),
-        { 
-          headers: { 
-            ...corsHeaders,
-            'Content-Type': 'application/json'
-          } 
-        }
-      )
-
-    } catch (textractError) {
-      console.error('Textract processing error:', textractError)
-      throw new Error(`Failed to process document with Textract: ${textractError.message}`)
-    }
+    )
 
   } catch (error) {
+    const endTime = new Date();
     console.error('Detailed error in extract-text function:', {
       name: error.name,
       message: error.message,
       stack: error.stack,
-      cause: error.cause
+      cause: error.cause,
+      timestamp: endTime.toISOString()
     })
 
     return new Response(
