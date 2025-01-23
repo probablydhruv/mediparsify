@@ -16,6 +16,7 @@ export const handler = async (req: Request) => {
   try {
     const formData = await req.formData();
     const file = formData.get('file');
+    const language = formData.get('language') || 'en';
 
     if (!file) {
       console.error('No file uploaded');
@@ -25,24 +26,36 @@ export const handler = async (req: Request) => {
       );
     }
 
-    console.log('File received:', file.name, 'Size:', file.size);
+    console.log('File received:', (file as any).name, 'Size:', (file as any).size, 'Language:', language);
+
+    // Check AWS credentials
+    const awsAccessKeyId = Deno.env.get('AWS_ACCESS_KEY_ID');
+    const awsSecretAccessKey = Deno.env.get('AWS_SECRET_ACCESS_KEY');
+
+    if (!awsAccessKeyId || !awsSecretAccessKey) {
+      console.error('AWS credentials not found');
+      return new Response(
+        JSON.stringify({ error: 'AWS credentials not configured' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      );
+    }
 
     const textractClient = new TextractClient({
       region: "us-east-1",
       credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
+        accessKeyId: awsAccessKeyId,
+        secretAccessKey: awsSecretAccessKey,
       },
     });
 
     const supabase = createClient(
-      process.env.SUPABASE_URL || '',
-      process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+      Deno.env.get('SUPABASE_URL') || '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
     );
 
     // Get the file data as a Uint8Array
     const fileData = await (file as unknown as Blob).arrayBuffer();
-    const buffer = Buffer.from(fileData);
+    const buffer = new Uint8Array(fileData);
 
     // Process with AWS Textract
     console.log('Sending to AWS Textract');
@@ -63,14 +76,14 @@ export const handler = async (req: Request) => {
     console.log('Extracted text length:', extractedText.length);
 
     // Upload file to Supabase Storage
-    const fileExt = file.name.split('.').pop();
+    const fileExt = (file as any).name.split('.').pop();
     const filePath = `${crypto.randomUUID()}.${fileExt}`;
 
     console.log('Uploading to Supabase Storage:', filePath);
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from('temp_pdfs')
       .upload(filePath, buffer, {
-        contentType: file.type,
+        contentType: (file as any).type,
         upsert: false
       });
 
@@ -83,10 +96,10 @@ export const handler = async (req: Request) => {
     const { data: fileRecord, error: dbError } = await supabase
       .from('uploaded_files')
       .insert({
-        filename: file.name,
+        filename: (file as any).name,
         file_path: filePath,
-        content_type: file.type,
-        size: file.size
+        content_type: (file as any).type,
+        size: (file as any).size
       })
       .select()
       .single();
@@ -102,7 +115,8 @@ export const handler = async (req: Request) => {
       JSON.stringify({
         message: 'File processed successfully',
         fileId: fileRecord.id,
-        extractedText
+        extractedText,
+        language
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

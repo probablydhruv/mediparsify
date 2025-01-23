@@ -4,6 +4,13 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const Index = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -11,6 +18,7 @@ const Index = () => {
   const [isUploaded, setIsUploaded] = useState(false);
   const [fileId, setFileId] = useState<string>("");
   const [fileUrl, setFileUrl] = useState<string>("");
+  const [selectedLanguage, setSelectedLanguage] = useState("en");
   const { toast } = useToast();
 
   const handleFileSelect = (file: File | null) => {
@@ -88,11 +96,28 @@ const Index = () => {
           </p>
         </div>
 
-        <FileUpload 
-          onFileSelect={handleFileSelect}
-          onUploadSuccess={handleUploadSuccess}
-          onReset={handleReset}
-        />
+        <div className="space-y-4">
+          <Select
+            value={selectedLanguage}
+            onValueChange={setSelectedLanguage}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select Language" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="en">English</SelectItem>
+              <SelectItem value="es">Spanish</SelectItem>
+              <SelectItem value="fr">French</SelectItem>
+              <SelectItem value="de">German</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <FileUpload 
+            onFileSelect={handleFileSelect}
+            onUploadSuccess={handleUploadSuccess}
+            onReset={handleReset}
+          />
+        </div>
 
         <div className="space-y-4">
           <Button
