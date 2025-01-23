@@ -1,5 +1,5 @@
-import { TextractClient, DetectDocumentTextCommand } from "@aws-sdk/client-textract";
-import { createClient } from '@supabase/supabase-js';
+import { TextractClient, DetectDocumentTextCommand } from "npm:@aws-sdk/client-textract";
+import { createClient } from 'npm:@supabase/supabase-js';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
