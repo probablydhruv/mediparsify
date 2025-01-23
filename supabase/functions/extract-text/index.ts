@@ -103,7 +103,7 @@ serve(async (req) => {
     try {
       const arrayBuffer = await fileBytes.arrayBuffer()
       const uploadCommand = new PutObjectCommand({
-        Bucket: Deno.env.get('AWS_S3_BUCKET_NAME'),
+        Bucket: 'textract-console-ap-south-1-a4d70d93-f44b-4cfe-abf7-9f1e5c7cf6b',
         Key: s3Key,
         Body: new Uint8Array(arrayBuffer),
         ContentType: fileData.content_type,
@@ -122,7 +122,7 @@ serve(async (req) => {
       const analyzeCommand = new AnalyzeDocumentCommand({
         Document: {
           S3Object: {
-            Bucket: Deno.env.get('AWS_S3_BUCKET_NAME'),
+            Bucket: 'textract-console-ap-south-1-a4d70d93-f44b-4cfe-abf7-9f1e5c7cf6b',
             Name: s3Key
           }
         },
