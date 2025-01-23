@@ -3,13 +3,13 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 import { 
   S3Client,
   PutObjectCommand,
-  ListBucketsCommand
+  ListBucketsCommand,
+  GetObjectCommand
 } from "npm:@aws-sdk/client-s3"
 import { 
   TextractClient, 
   DetectDocumentTextCommand,
-  StartDocumentAnalysisCommand,
-  GetDocumentAnalysisCommand,
+  AnalyzeDocumentCommand
 } from "npm:@aws-sdk/client-textract"
 
 const corsHeaders = {
@@ -18,15 +18,16 @@ const corsHeaders = {
 }
 
 serve(async (req) => {
+  // Handle CORS
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
   }
 
   try {
-    const { fileId } = await req.json()
-    console.log('Starting AWS service verification for file ID:', fileId)
+    console.log("Starting AWS service verification...")
 
-    // Initialize AWS clients
+    // Initialize AWS clients with explicit logging
+    console.log("Initializing AWS clients...")
     const s3Client = new S3Client({
       region: Deno.env.get('AWS_REGION') ?? 'ap-south-1',
       credentials: {
@@ -44,15 +45,19 @@ serve(async (req) => {
     })
 
     // Test S3 access
-    console.log('Testing S3 access...')
+    console.log("Testing S3 access by listing buckets...")
     try {
       const listBucketsCommand = new ListBucketsCommand({})
       const listBucketsResponse = await s3Client.send(listBucketsCommand)
-      console.log('S3 Buckets:', listBucketsResponse.Buckets?.map(b => b.Name))
+      console.log('S3 Buckets found:', listBucketsResponse.Buckets?.map(b => b.Name))
     } catch (s3Error) {
       console.error('S3 access test failed:', s3Error)
       throw new Error(`S3 access failed: ${s3Error.message}`)
     }
+
+    // Get the fileId from request
+    const { fileId } = await req.json()
+    console.log("Processing file ID:", fileId)
 
     // Initialize Supabase client
     const supabaseAdmin = createClient(
@@ -61,6 +66,7 @@ serve(async (req) => {
     )
 
     // Get file details from database
+    console.log("Fetching file details from database...")
     const { data: fileData, error: fileError } = await supabaseAdmin
       .from('uploaded_files')
       .select('*')
@@ -72,13 +78,14 @@ serve(async (req) => {
       throw new Error('File not found')
     }
 
-    console.log('Retrieved file metadata:', {
+    console.log("File metadata retrieved:", {
       filename: fileData.filename,
       path: fileData.file_path,
       size: fileData.size
     })
 
     // Download file from Supabase Storage
+    console.log("Downloading file from Supabase storage...")
     const { data: fileBytes, error: downloadError } = await supabaseAdmin
       .storage
       .from('temp_pdfs')
@@ -90,7 +97,7 @@ serve(async (req) => {
     }
 
     // Upload to S3
-    console.log('Starting file transfer to S3...')
+    console.log("Uploading file to S3...")
     const s3Key = `uploads/${fileData.file_path}`
     
     try {
@@ -109,11 +116,11 @@ serve(async (req) => {
       throw new Error(`Failed to upload file to S3: ${s3Error.message}`)
     }
 
-    // Test Textract access with a simple detect text operation
-    console.log('Testing Textract access...')
+    // Test Textract
+    console.log("Testing Textract with uploaded document...")
     try {
-      const startCommand = new StartDocumentAnalysisCommand({
-        DocumentLocation: {
+      const analyzeCommand = new AnalyzeDocumentCommand({
+        Document: {
           S3Object: {
             Bucket: Deno.env.get('AWS_S3_BUCKET_NAME'),
             Name: s3Key
@@ -122,46 +129,29 @@ serve(async (req) => {
         FeatureTypes: ['FORMS', 'TABLES']
       })
 
-      const startResponse = await textract.send(startCommand)
-      console.log('Textract job started successfully with ID:', startResponse.JobId)
-      
-      if (!startResponse.JobId) {
-        throw new Error('Failed to start Textract analysis')
-      }
+      const analyzeResponse = await textract.send(analyzeCommand)
+      console.log('Textract analysis successful')
 
-      // Poll for completion
-      const maxAttempts = 30
-      let attempts = 0
       let extractedText = ''
-
-      while (attempts < maxAttempts) {
-        const getCommand = new GetDocumentAnalysisCommand({
-          JobId: startResponse.JobId
-        })
-
-        const getResponse = await textract.send(getCommand)
-        console.log('Textract job status:', getResponse.JobStatus)
-
-        if (getResponse.JobStatus === 'SUCCEEDED') {
-          let blocks = getResponse.Blocks || []
-          blocks.forEach((block) => {
-            if (block.BlockType === 'LINE') {
-              extractedText += (block.Text || '') + '\n'
-            }
-          })
-          console.log('Textract processing complete')
-          break
-        } else if (getResponse.JobStatus === 'FAILED') {
-          throw new Error('Document analysis failed')
+      analyzeResponse.Blocks?.forEach((block) => {
+        if (block.BlockType === 'LINE') {
+          extractedText += (block.Text || '') + '\n'
         }
+      })
 
-        await new Promise(resolve => setTimeout(resolve, 1000))
-        attempts++
-      }
-
+      console.log('Text extraction completed successfully')
+      
       return new Response(
-        JSON.stringify({ text: extractedText }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ 
+          text: extractedText,
+          message: "Processing completed successfully" 
+        }),
+        { 
+          headers: { 
+            ...corsHeaders,
+            'Content-Type': 'application/json'
+          } 
+        }
       )
 
     } catch (textractError) {
