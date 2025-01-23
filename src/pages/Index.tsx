@@ -11,12 +11,14 @@ const Index = () => {
   const [isUploaded, setIsUploaded] = useState(false);
   const [extractedText, setExtractedText] = useState<string>("");
   const [fileId, setFileId] = useState<string>("");
+  const [processingStatus, setProcessingStatus] = useState<string>("");
   const { toast } = useToast();
 
   const handleFileSelect = (file: File | null) => {
     console.log("File selected:", file?.name);
     setSelectedFile(file);
     setExtractedText("");
+    setProcessingStatus("");
   };
 
   const handleUploadSuccess = (id: string) => {
@@ -31,6 +33,7 @@ const Index = () => {
     setIsUploaded(false);
     setExtractedText("");
     setFileId("");
+    setProcessingStatus("");
   };
 
   const handleProcess = async () => {
@@ -44,6 +47,7 @@ const Index = () => {
     }
 
     setIsProcessing(true);
+    setProcessingStatus("Starting document processing...");
     console.log("Processing file ID:", fileId);
 
     try {
@@ -58,7 +62,7 @@ const Index = () => {
       
       toast({
         title: "Success!",
-        description: "Text extracted successfully.",
+        description: `Processed ${data.pageCount} pages successfully.`,
       });
     } catch (error) {
       console.error("Text extraction error:", error);
@@ -69,6 +73,7 @@ const Index = () => {
       });
     } finally {
       setIsProcessing(false);
+      setProcessingStatus("");
     }
   };
 
@@ -99,7 +104,7 @@ const Index = () => {
             {isProcessing ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Extracting Text...
+                Processing Document...
               </>
             ) : isUploaded ? (
               "Process Report"
@@ -107,12 +112,18 @@ const Index = () => {
               "Upload Report"
             )}
           </Button>
+
+          {processingStatus && (
+            <p className="text-sm text-center text-gray-600">
+              {processingStatus}
+            </p>
+          )}
         </div>
 
         {extractedText && (
           <div className="mt-8 p-4 bg-gray-50 rounded-lg">
-            <h3 className="text-lg font-semibold mb-2">Extracted Text (Testing Only):</h3>
-            <pre className="whitespace-pre-wrap text-sm text-gray-700">
+            <h3 className="text-lg font-semibold mb-2">Extracted Text:</h3>
+            <pre className="whitespace-pre-wrap text-sm text-gray-700 max-h-96 overflow-y-auto">
               {extractedText}
             </pre>
           </div>

@@ -1,25 +1,18 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
-import { 
-  TextractClient, 
-  AnalyzeDocumentCommand,
-} from "npm:@aws-sdk/client-textract"
+import { PDFDocument } from 'https://cdn.skypack.dev/pdf-lib'
+import { TextractClient, AnalyzeDocumentCommand } from "npm:@aws-sdk/client-textract"
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB in bytes
-
 serve(async (req) => {
   // Handle CORS
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
   }
-
-  const startTime = new Date();
-  console.log(`Processing started at: ${startTime.toISOString()}`);
 
   try {
     const { fileId } = await req.json()
@@ -30,14 +23,13 @@ serve(async (req) => {
     }
 
     // Initialize Supabase client
-    const supabaseAdmin = createClient(
+    const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // Get file details from database
     console.log("Fetching file details from database...")
-    const { data: fileData, error: fileError } = await supabaseAdmin
+    const { data: fileData, error: fileError } = await supabase
       .from('uploaded_files')
       .select('*')
       .eq('id', fileId)
@@ -48,12 +40,6 @@ serve(async (req) => {
       throw new Error('File not found in database')
     }
 
-    // Check file size
-    console.log(`File size: ${fileData.size} bytes`);
-    if (fileData.size > MAX_FILE_SIZE) {
-      throw new Error(`File size exceeds maximum limit of ${MAX_FILE_SIZE / (1024 * 1024)}MB`);
-    }
-
     console.log("File metadata retrieved:", {
       filename: fileData.filename,
       path: fileData.file_path,
@@ -62,7 +48,7 @@ serve(async (req) => {
 
     // Download file from Supabase Storage
     console.log("Downloading file from Supabase storage...")
-    const { data: fileBytes, error: downloadError } = await supabaseAdmin
+    const { data: fileBytes, error: downloadError } = await supabase
       .storage
       .from('temp_pdfs')
       .download(fileData.file_path)
@@ -72,11 +58,13 @@ serve(async (req) => {
       throw new Error('Could not download file from Supabase storage')
     }
 
-    // Convert file to buffer
-    const buffer = await fileBytes.arrayBuffer()
+    // Load PDF document
+    console.log("Loading PDF document...")
+    const pdfDoc = await PDFDocument.load(await fileBytes.arrayBuffer())
+    const pageCount = pdfDoc.getPageCount()
+    console.log(`PDF has ${pageCount} pages`)
 
     // Initialize Textract client
-    console.log("Initializing Textract client...")
     const textract = new TextractClient({
       region: Deno.env.get('AWS_REGION') ?? 'ap-south-1',
       credentials: {
@@ -85,44 +73,56 @@ serve(async (req) => {
       },
     })
 
-    // Process document with Textract
-    console.log("Sending document to Textract for analysis...")
-    const command = new AnalyzeDocumentCommand({
-      Document: {
-        Bytes: new Uint8Array(buffer)
-      },
-      FeatureTypes: ['FORMS', 'TABLES']
-    })
+    // Process each page
+    const pageResults = []
+    for (let i = 0; i < pageCount; i++) {
+      console.log(`Processing page ${i + 1} of ${pageCount}...`)
+      
+      // Convert page to PNG
+      const page = pdfDoc.getPage(i)
+      const pngBytes = await page.png({
+        width: page.getWidth() * 2,
+        height: page.getHeight() * 2,
+      })
 
-    const response = await textract.send(command)
-    
-    // Extract text and analyze document properties
-    let extractedText = ''
-    let pageCount = 0
-    const pageNumbers = new Set()
+      // Process with Textract
+      const command = new AnalyzeDocumentCommand({
+        Document: {
+          Bytes: pngBytes
+        },
+        FeatureTypes: ['FORMS', 'TABLES']
+      })
 
-    response.Blocks?.forEach((block) => {
-      if (block.BlockType === 'LINE') {
-        extractedText += (block.Text || '') + '\n'
+      try {
+        const response = await textract.send(command)
+        let pageText = ''
+        
+        response.Blocks?.forEach((block) => {
+          if (block.BlockType === 'LINE') {
+            pageText += (block.Text || '') + '\n'
+          }
+        })
+
+        pageResults.push({
+          pageNumber: i + 1,
+          text: pageText
+        })
+      } catch (error) {
+        console.error(`Error processing page ${i + 1}:`, error)
+        throw new Error(`Failed to process page ${i + 1}`)
       }
-      if (block.Page) {
-        pageNumbers.add(block.Page)
-      }
-    })
+    }
 
-    pageCount = pageNumbers.size
-    console.log(`Number of pages detected: ${pageCount}`);
-
-    const endTime = new Date();
-    const processingTime = endTime.getTime() - startTime.getTime();
-    console.log(`Processing completed at: ${endTime.toISOString()}`);
-    console.log(`Total processing time: ${processingTime}ms`);
+    // Combine results
+    console.log("Combining results from all pages...")
+    const combinedText = pageResults.map(result => 
+      `--- Page ${result.pageNumber} ---\n${result.text}`
+    ).join('\n\n')
 
     return new Response(
       JSON.stringify({ 
-        text: extractedText,
+        text: combinedText,
         pageCount,
-        processingTimeMs: processingTime,
         message: "Processing completed successfully" 
       }),
       { 
@@ -134,22 +134,13 @@ serve(async (req) => {
     )
 
   } catch (error) {
-    const endTime = new Date();
-    console.error('Detailed error in extract-text function:', {
-      name: error.name,
-      message: error.message,
-      stack: error.stack,
-      cause: error.cause,
-      timestamp: endTime.toISOString()
-    })
-
+    console.error('Error in extract-text function:', error)
     return new Response(
       JSON.stringify({ 
         error: error.message,
         details: {
           name: error.name,
-          message: error.message,
-          cause: error.cause
+          message: error.message
         }
       }),
       { 
