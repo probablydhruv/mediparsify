@@ -2,7 +2,8 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 import { 
   TextractClient, 
-  AnalyzeDocumentCommand,
+  StartDocumentAnalysisCommand,
+  GetDocumentAnalysisCommand,
 } from "npm:@aws-sdk/client-textract"
 
 const corsHeaders = {
@@ -74,26 +75,63 @@ serve(async (req) => {
     // Convert file to buffer
     const buffer = await fileBytes.arrayBuffer()
     
-    // Process with Textract directly using the buffer
-    console.log("Processing with Textract...")
+    // Start asynchronous document analysis
+    console.log("Starting document analysis with Textract...")
     try {
-      const analyzeCommand = new AnalyzeDocumentCommand({
-        Document: {
+      const startCommand = new StartDocumentAnalysisCommand({
+        DocumentLocation: {
           Bytes: new Uint8Array(buffer)
         },
         FeatureTypes: ['FORMS', 'TABLES']
       })
 
       console.log("Sending document to Textract...")
-      const analyzeResponse = await textract.send(analyzeCommand)
-      console.log('Textract analysis successful')
+      const startResponse = await textract.send(startCommand)
+      
+      if (!startResponse.JobId) {
+        throw new Error('No JobId received from Textract')
+      }
 
+      console.log("Analysis started with JobId:", startResponse.JobId)
+
+      // Poll for results
+      let analysisComplete = false
+      let maxAttempts = 30 // Maximum number of polling attempts
+      let attempts = 0
       let extractedText = ''
-      analyzeResponse.Blocks?.forEach((block) => {
-        if (block.BlockType === 'LINE') {
-          extractedText += (block.Text || '') + '\n'
+
+      while (!analysisComplete && attempts < maxAttempts) {
+        console.log(`Polling attempt ${attempts + 1} of ${maxAttempts}...`)
+        
+        const getResultsCommand = new GetDocumentAnalysisCommand({
+          JobId: startResponse.JobId
+        })
+
+        const analysisResponse = await textract.send(getResultsCommand)
+        
+        if (analysisResponse.JobStatus === 'SUCCEEDED') {
+          console.log("Analysis completed successfully")
+          analysisComplete = true
+          
+          // Extract text from blocks
+          analysisResponse.Blocks?.forEach((block) => {
+            if (block.BlockType === 'LINE') {
+              extractedText += (block.Text || '') + '\n'
+            }
+          })
+        } else if (analysisResponse.JobStatus === 'FAILED') {
+          throw new Error(`Analysis failed: ${analysisResponse.StatusMessage}`)
         }
-      })
+
+        if (!analysisComplete) {
+          attempts++
+          await new Promise(resolve => setTimeout(resolve, 1000)) // Wait 1 second before next poll
+        }
+      }
+
+      if (!analysisComplete) {
+        throw new Error('Document analysis timed out')
+      }
 
       console.log('Text extraction completed successfully')
       
