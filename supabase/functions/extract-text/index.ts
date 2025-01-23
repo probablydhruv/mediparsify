@@ -1,3 +1,4 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { TextractClient, DetectDocumentTextCommand } from "npm:@aws-sdk/client-textract";
 import { createClient } from 'npm:@supabase/supabase-js';
 
@@ -6,10 +7,13 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+console.log('Extract text function initialized');
+
 export const handler = async (req: Request) => {
   console.log('Extract text function called');
 
   if (req.method === 'OPTIONS') {
+    console.log('Handling CORS preflight request');
     return new Response(null, { headers: corsHeaders });
   }
 
@@ -53,13 +57,6 @@ export const handler = async (req: Request) => {
 
     console.log('TextractClient initialized');
 
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') || '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
-    );
-
-    console.log('Supabase client initialized');
-
     // Get the file data as a Uint8Array
     console.log('Converting file to buffer...');
     const fileData = await (file as unknown as Blob).arrayBuffer();
@@ -76,7 +73,7 @@ export const handler = async (req: Request) => {
 
     console.log('Awaiting Textract response...');
     const textractResponse = await textractClient.send(command);
-    console.log('Received Textract response');
+    console.log('Received Textract response:', JSON.stringify(textractResponse, null, 2));
 
     // Extract text from Textract response
     const extractedText = textractResponse.Blocks?.filter(block => block.BlockType === 'LINE')
@@ -85,49 +82,9 @@ export const handler = async (req: Request) => {
 
     console.log('Extracted text length:', extractedText.length);
 
-    // Upload file to Supabase Storage
-    const fileExt = (file as any).name.split('.').pop();
-    const filePath = `${crypto.randomUUID()}.${fileExt}`;
-
-    console.log('Uploading to Supabase Storage:', filePath);
-    const { data: uploadData, error: uploadError } = await supabase.storage
-      .from('temp_pdfs')
-      .upload(filePath, buffer, {
-        contentType: (file as any).type,
-        upsert: false
-      });
-
-    if (uploadError) {
-      console.error('Storage upload error:', uploadError);
-      throw uploadError;
-    }
-
-    console.log('File uploaded successfully to storage');
-
-    // Save file metadata to database
-    console.log('Saving file metadata to database...');
-    const { data: fileRecord, error: dbError } = await supabase
-      .from('uploaded_files')
-      .insert({
-        filename: (file as any).name,
-        file_path: filePath,
-        content_type: (file as any).type,
-        size: (file as any).size
-      })
-      .select()
-      .single();
-
-    if (dbError) {
-      console.error('Database insert error:', dbError);
-      throw dbError;
-    }
-
-    console.log('File metadata saved successfully:', fileRecord.id);
-
     return new Response(
       JSON.stringify({
-        message: 'File processed successfully',
-        fileId: fileRecord.id,
+        message: 'Text extracted successfully',
         extractedText,
         language
       }),
