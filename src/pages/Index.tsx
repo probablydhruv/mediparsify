@@ -9,16 +9,14 @@ const Index = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isUploaded, setIsUploaded] = useState(false);
-  const [extractedText, setExtractedText] = useState<string>("");
   const [fileId, setFileId] = useState<string>("");
-  const [processingStatus, setProcessingStatus] = useState<string>("");
+  const [fileUrl, setFileUrl] = useState<string>("");
   const { toast } = useToast();
 
   const handleFileSelect = (file: File | null) => {
     console.log("File selected:", file?.name);
     setSelectedFile(file);
-    setExtractedText("");
-    setProcessingStatus("");
+    setFileUrl("");
   };
 
   const handleUploadSuccess = (id: string) => {
@@ -31,9 +29,8 @@ const Index = () => {
     console.log("Resetting form");
     setSelectedFile(null);
     setIsUploaded(false);
-    setExtractedText("");
     setFileId("");
-    setProcessingStatus("");
+    setFileUrl("");
   };
 
   const handleProcess = async () => {
@@ -47,7 +44,6 @@ const Index = () => {
     }
 
     setIsProcessing(true);
-    setProcessingStatus("Starting document processing...");
     console.log("Processing file ID:", fileId);
 
     try {
@@ -57,23 +53,22 @@ const Index = () => {
 
       if (error) throw error;
 
-      console.log("Text extraction successful");
-      setExtractedText(data.text);
+      console.log("File processing successful");
+      setFileUrl(data.url);
       
       toast({
         title: "Success!",
-        description: `Processed ${data.pageCount} pages successfully.`,
+        description: "File processed successfully.",
       });
     } catch (error) {
-      console.error("Text extraction error:", error);
+      console.error("Processing error:", error);
       toast({
         title: "Processing Failed",
-        description: "Failed to extract text from the document. Please try again.",
+        description: "Failed to process the file. Please try again.",
         variant: "destructive",
       });
     } finally {
       setIsProcessing(false);
-      setProcessingStatus("");
     }
   };
 
@@ -82,10 +77,10 @@ const Index = () => {
       <div className="max-w-3xl mx-auto space-y-8 animate-fade-in">
         <div className="text-center space-y-2">
           <h1 className="text-3xl md:text-4xl font-bold text-gray-900">
-            Medical Report Parser
+            PDF File Upload
           </h1>
           <p className="text-gray-600">
-            Upload your prescription to extract the text
+            Upload your PDF file to store it securely
           </p>
         </div>
 
@@ -104,30 +99,29 @@ const Index = () => {
             {isProcessing ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Processing Document...
+                Processing File...
               </>
             ) : isUploaded ? (
-              "Process Report"
+              "Process File"
             ) : (
-              "Upload Report"
+              "Upload File"
             )}
           </Button>
 
-          {processingStatus && (
-            <p className="text-sm text-center text-gray-600">
-              {processingStatus}
-            </p>
+          {fileUrl && (
+            <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+              <h3 className="text-lg font-semibold mb-2">File URL:</h3>
+              <a 
+                href={fileUrl} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-blue-500 hover:text-blue-700 break-all"
+              >
+                {fileUrl}
+              </a>
+            </div>
           )}
         </div>
-
-        {extractedText && (
-          <div className="mt-8 p-4 bg-gray-50 rounded-lg">
-            <h3 className="text-lg font-semibold mb-2">Extracted Text:</h3>
-            <pre className="whitespace-pre-wrap text-sm text-gray-700 max-h-96 overflow-y-auto">
-              {extractedText}
-            </pre>
-          </div>
-        )}
       </div>
     </div>
   );
