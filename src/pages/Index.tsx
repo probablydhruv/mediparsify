@@ -89,7 +89,7 @@ const Index = () => {
       <div className="max-w-3xl mx-auto space-y-8 animate-fade-in">
         <div className="text-center space-y-2">
           <h1 className="text-3xl md:text-4xl font-bold text-gray-900">
-            PDF File Upload
+            mediparsify
           </h1>
           <p className="text-gray-600">
             Upload your PDF file to store it securely
@@ -97,21 +97,6 @@ const Index = () => {
         </div>
 
         <div className="space-y-4">
-          <Select
-            value={selectedLanguage}
-            onValueChange={setSelectedLanguage}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select Language" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="en">English</SelectItem>
-              <SelectItem value="es">Spanish</SelectItem>
-              <SelectItem value="fr">French</SelectItem>
-              <SelectItem value="de">German</SelectItem>
-            </SelectContent>
-          </Select>
-
           <FileUpload 
             onFileSelect={handleFileSelect}
             onUploadSuccess={handleUploadSuccess}
@@ -120,6 +105,37 @@ const Index = () => {
         </div>
 
         <div className="space-y-4">
+          {fileUrl && (
+            <div className="mt-4 p-4 bg-gray-50 rounded-lg space-y-4">
+              <Select
+                value={selectedLanguage}
+                onValueChange={setSelectedLanguage}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select Language" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="en">English</SelectItem>
+                  <SelectItem value="es">Spanish</SelectItem>
+                  <SelectItem value="fr">French</SelectItem>
+                  <SelectItem value="de">German</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <div>
+                <h3 className="text-lg font-semibold mb-2">File URL:</h3>
+                <a 
+                  href={fileUrl} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-blue-500 hover:text-blue-700 break-all"
+                >
+                  {fileUrl}
+                </a>
+              </div>
+            </div>
+          )}
+
           <Button
             onClick={handleProcess}
             disabled={!isUploaded || isProcessing}
@@ -136,20 +152,6 @@ const Index = () => {
               "Upload File"
             )}
           </Button>
-
-          {fileUrl && (
-            <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-              <h3 className="text-lg font-semibold mb-2">File URL:</h3>
-              <a 
-                href={fileUrl} 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="text-blue-500 hover:text-blue-700 break-all"
-              >
-                {fileUrl}
-              </a>
-            </div>
-          )}
         </div>
       </div>
     </div>

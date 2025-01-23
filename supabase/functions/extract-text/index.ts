@@ -14,6 +14,7 @@ export const handler = async (req: Request) => {
   }
 
   try {
+    console.log('Starting to process request...');
     const formData = await req.formData();
     const file = formData.get('file');
     const language = formData.get('language') || 'en';
@@ -33,12 +34,14 @@ export const handler = async (req: Request) => {
     const awsSecretAccessKey = Deno.env.get('AWS_SECRET_ACCESS_KEY');
 
     if (!awsAccessKeyId || !awsSecretAccessKey) {
-      console.error('AWS credentials not found');
+      console.error('AWS credentials not found or invalid');
       return new Response(
         JSON.stringify({ error: 'AWS credentials not configured' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
     }
+
+    console.log('AWS credentials verified successfully');
 
     const textractClient = new TextractClient({
       region: "us-east-1",
@@ -48,23 +51,30 @@ export const handler = async (req: Request) => {
       },
     });
 
+    console.log('TextractClient initialized');
+
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') || '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
     );
 
+    console.log('Supabase client initialized');
+
     // Get the file data as a Uint8Array
+    console.log('Converting file to buffer...');
     const fileData = await (file as unknown as Blob).arrayBuffer();
     const buffer = new Uint8Array(fileData);
+    console.log('File converted to buffer successfully');
 
     // Process with AWS Textract
-    console.log('Sending to AWS Textract');
+    console.log('Sending to AWS Textract...');
     const command = new DetectDocumentTextCommand({
       Document: {
         Bytes: buffer
       }
     });
 
+    console.log('Awaiting Textract response...');
     const textractResponse = await textractClient.send(command);
     console.log('Received Textract response');
 
@@ -92,7 +102,10 @@ export const handler = async (req: Request) => {
       throw uploadError;
     }
 
+    console.log('File uploaded successfully to storage');
+
     // Save file metadata to database
+    console.log('Saving file metadata to database...');
     const { data: fileRecord, error: dbError } = await supabase
       .from('uploaded_files')
       .insert({
@@ -109,7 +122,7 @@ export const handler = async (req: Request) => {
       throw dbError;
     }
 
-    console.log('Successfully processed file:', fileRecord.id);
+    console.log('File metadata saved successfully:', fileRecord.id);
 
     return new Response(
       JSON.stringify({
