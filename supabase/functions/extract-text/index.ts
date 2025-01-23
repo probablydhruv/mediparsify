@@ -23,7 +23,7 @@ export const handler = async (req: Request) => {
 
   try {
     const formData = await req.formData();
-    const file = formData.get('file') as File;
+    const file = formData.get('file');
 
     if (!file) {
       console.error('No file uploaded');
@@ -40,14 +40,13 @@ export const handler = async (req: Request) => {
       process.env.SUPABASE_SERVICE_ROLE_KEY || ''
     );
 
-    // Convert file to ArrayBuffer for AWS Textract
-    const arrayBuffer = await file.arrayBuffer();
-    const uint8Array = new Uint8Array(arrayBuffer);
+    // Convert file to Buffer for AWS Textract
+    const buffer = Buffer.from(await file.arrayBuffer());
 
     // Process with AWS Textract
     const command = new DetectDocumentTextCommand({
       Document: {
-        Bytes: uint8Array
+        Bytes: buffer
       }
     });
 
@@ -69,7 +68,7 @@ export const handler = async (req: Request) => {
     console.log('Uploading to Supabase Storage:', filePath);
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from('temp_pdfs')
-      .upload(filePath, file, {
+      .upload(filePath, buffer, {
         contentType: file.type,
         upsert: false
       });
