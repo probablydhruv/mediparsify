@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { FileUpload } from "@/components/FileUpload";
-import { LanguageSelect } from "@/components/LanguageSelect";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
@@ -8,7 +7,6 @@ import { supabase } from "@/integrations/supabase/client";
 
 const Index = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [selectedLanguage, setSelectedLanguage] = useState<string>("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [isUploaded, setIsUploaded] = useState(false);
   const [extractedText, setExtractedText] = useState<string>("");
@@ -31,14 +29,8 @@ const Index = () => {
     console.log("Resetting form");
     setSelectedFile(null);
     setIsUploaded(false);
-    setSelectedLanguage("");
     setExtractedText("");
     setFileId("");
-  };
-
-  const handleLanguageSelect = (language: string) => {
-    console.log("Language selected:", language);
-    setSelectedLanguage(language);
   };
 
   const handleProcess = async () => {
@@ -88,7 +80,7 @@ const Index = () => {
             Medical Report Parser
           </h1>
           <p className="text-gray-600">
-            Upload your prescription and select your preferred language
+            Upload your prescription to extract the text
           </p>
         </div>
 
@@ -99,13 +91,9 @@ const Index = () => {
         />
 
         <div className="space-y-4">
-          <LanguageSelect 
-            onLanguageSelect={handleLanguageSelect}
-          />
-
           <Button
             onClick={handleProcess}
-            disabled={!isUploaded || !selectedLanguage || isProcessing}
+            disabled={!isUploaded || isProcessing}
             className="w-full bg-medical-bright hover:bg-medical-sky text-white transition-colors"
           >
             {isProcessing ? (
@@ -121,7 +109,6 @@ const Index = () => {
           </Button>
         </div>
 
-        {/* Temporary text display for testing */}
         {extractedText && (
           <div className="mt-8 p-4 bg-gray-50 rounded-lg">
             <h3 className="text-lg font-semibold mb-2">Extracted Text (Testing Only):</h3>
