@@ -25,8 +25,8 @@ export const FileUpload = ({ onFileSelect, onUploadSuccess, onReset }: FileUploa
       setErrorMessage("Only PDF files are allowed");
       return false;
     }
-    if (file.size > 10 * 1024 * 1024) { // 10MB
-      setErrorMessage("Maximum file size is 10MB");
+    if (file.size > 5 * 1024 * 1024) { // 5MB
+      setErrorMessage("Maximum file size is 5MB");
       return false;
     }
     return true;
