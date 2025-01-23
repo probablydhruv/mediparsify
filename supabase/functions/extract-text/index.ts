@@ -91,13 +91,21 @@ serve(async (req) => {
       console.log(`Processing page ${i + 1} of ${pageCount}...`)
       
       try {
-        // Convert page to PNG
-        const page = pdfDoc.getPage(i)
-        console.log(`Converting page ${i + 1} to PNG...`)
-        const pngBytes = await page.png({
-          width: Math.floor(page.getWidth() * 2),
-          height: Math.floor(page.getHeight() * 2),
-        })
+        // Get page dimensions
+        const page = pdfDoc.getPages()[i]
+        const { width, height } = page.getSize()
+        
+        // Convert page to image data
+        console.log(`Converting page ${i + 1} to image data...`)
+        const scale = 2 // Increase resolution
+        const imageData = await page.render({
+          width: Math.floor(width * scale),
+          height: Math.floor(height * scale)
+        }).toImageData()
+
+        // Convert image data to PNG bytes
+        console.log(`Converting image data to PNG for page ${i + 1}...`)
+        const pngBytes = new Uint8Array(imageData.data.buffer)
 
         // Process with Textract
         console.log(`Sending page ${i + 1} to Textract...`)
