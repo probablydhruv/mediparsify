@@ -16,7 +16,7 @@ serve(async (req) => {
 
   try {
     const { fileId } = await req.json()
-    console.log("Processing file ID:", fileId)
+    console.log("Starting processing for file ID:", fileId)
 
     if (!fileId) {
       throw new Error('No fileId provided')
@@ -33,10 +33,14 @@ serve(async (req) => {
       .from('uploaded_files')
       .select('*')
       .eq('id', fileId)
-      .single()
+      .maybeSingle()
 
-    if (fileError || !fileData) {
-      console.error('Error fetching file details:', fileError)
+    if (fileError) {
+      console.error('Database error:', fileError)
+      throw new Error('Failed to fetch file details from database')
+    }
+
+    if (!fileData) {
       throw new Error('File not found in database')
     }
 
@@ -47,26 +51,34 @@ serve(async (req) => {
     })
 
     // Download file from Supabase Storage
-    console.log("Downloading file from Supabase storage...")
+    console.log("Downloading file from storage...")
     const { data: fileBytes, error: downloadError } = await supabase
       .storage
       .from('temp_pdfs')
       .download(fileData.file_path)
 
-    if (downloadError || !fileBytes) {
-      console.error('Error downloading file from Supabase:', downloadError)
-      throw new Error('Could not download file from Supabase storage')
+    if (downloadError) {
+      console.error('Storage download error:', downloadError)
+      throw new Error('Failed to download file from storage')
+    }
+
+    if (!fileBytes) {
+      throw new Error('No file content received from storage')
     }
 
     // Load PDF document
+    console.log("Converting PDF to ArrayBuffer...")
+    const pdfArrayBuffer = await fileBytes.arrayBuffer()
+    
     console.log("Loading PDF document...")
-    const pdfDoc = await PDFDocument.load(await fileBytes.arrayBuffer())
+    const pdfDoc = await PDFDocument.load(pdfArrayBuffer)
     const pageCount = pdfDoc.getPageCount()
     console.log(`PDF has ${pageCount} pages`)
 
     // Initialize Textract client
+    console.log("Initializing Textract client...")
     const textract = new TextractClient({
-      region: Deno.env.get('AWS_REGION') ?? 'ap-south-1',
+      region: 'ap-south-1',
       credentials: {
         accessKeyId: Deno.env.get('AWS_ACCESS_KEY_ID') ?? '',
         secretAccessKey: Deno.env.get('AWS_SECRET_ACCESS_KEY') ?? '',
@@ -78,22 +90,24 @@ serve(async (req) => {
     for (let i = 0; i < pageCount; i++) {
       console.log(`Processing page ${i + 1} of ${pageCount}...`)
       
-      // Convert page to PNG
-      const page = pdfDoc.getPage(i)
-      const pngBytes = await page.png({
-        width: page.getWidth() * 2,
-        height: page.getHeight() * 2,
-      })
-
-      // Process with Textract
-      const command = new AnalyzeDocumentCommand({
-        Document: {
-          Bytes: pngBytes
-        },
-        FeatureTypes: ['FORMS', 'TABLES']
-      })
-
       try {
+        // Convert page to PNG
+        const page = pdfDoc.getPage(i)
+        console.log(`Converting page ${i + 1} to PNG...`)
+        const pngBytes = await page.png({
+          width: Math.floor(page.getWidth() * 2),
+          height: Math.floor(page.getHeight() * 2),
+        })
+
+        // Process with Textract
+        console.log(`Sending page ${i + 1} to Textract...`)
+        const command = new AnalyzeDocumentCommand({
+          Document: {
+            Bytes: pngBytes
+          },
+          FeatureTypes: ['FORMS', 'TABLES']
+        })
+
         const response = await textract.send(command)
         let pageText = ''
         
@@ -107,9 +121,11 @@ serve(async (req) => {
           pageNumber: i + 1,
           text: pageText
         })
+        
+        console.log(`Successfully processed page ${i + 1}`)
       } catch (error) {
         console.error(`Error processing page ${i + 1}:`, error)
-        throw new Error(`Failed to process page ${i + 1}`)
+        throw new Error(`Failed to process page ${i + 1}: ${error.message}`)
       }
     }
 
@@ -119,6 +135,7 @@ serve(async (req) => {
       `--- Page ${result.pageNumber} ---\n${result.text}`
     ).join('\n\n')
 
+    console.log("Processing completed successfully")
     return new Response(
       JSON.stringify({ 
         text: combinedText,
@@ -140,12 +157,13 @@ serve(async (req) => {
         error: error.message,
         details: {
           name: error.name,
-          message: error.message
+          message: error.message,
+          stack: error.stack
         }
       }),
       { 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }, 
-        status: 500 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 500
       }
     )
   }
