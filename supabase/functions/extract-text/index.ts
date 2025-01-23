@@ -1,18 +1,10 @@
-import { createClient } from '@supabase/supabase-js';
 import { TextractClient, DetectDocumentTextCommand } from "@aws-sdk/client-textract";
+import { createClient } from '@supabase/supabase-js';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
-
-const textractClient = new TextractClient({
-  region: "us-east-1",
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
-  },
-});
 
 export const handler = async (req: Request) => {
   console.log('Extract text function called');
@@ -35,22 +27,31 @@ export const handler = async (req: Request) => {
 
     console.log('File received:', file.name, 'Size:', file.size);
 
+    const textractClient = new TextractClient({
+      region: "us-east-1",
+      credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
+      },
+    });
+
     const supabase = createClient(
       process.env.SUPABASE_URL || '',
       process.env.SUPABASE_SERVICE_ROLE_KEY || ''
     );
 
-    // Convert file to Buffer for AWS Textract
-    const buffer = Buffer.from(await file.arrayBuffer());
+    // Get the file data as a Uint8Array
+    const fileData = await (file as unknown as Blob).arrayBuffer();
+    const buffer = Buffer.from(fileData);
 
     // Process with AWS Textract
+    console.log('Sending to AWS Textract');
     const command = new DetectDocumentTextCommand({
       Document: {
         Bytes: buffer
       }
     });
 
-    console.log('Sending to AWS Textract');
     const textractResponse = await textractClient.send(command);
     console.log('Received Textract response');
 

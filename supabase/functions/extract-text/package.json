@@ -4,7 +4,6 @@
   "main": "index.ts",
   "dependencies": {
     "@aws-sdk/client-textract": "^3.0.0",
-    "@supabase/supabase-js": "^2.7.1",
-    "buffer": "^6.0.3"
+    "@supabase/supabase-js": "^2.7.1"
   }
 }
