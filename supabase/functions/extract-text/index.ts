@@ -91,21 +91,19 @@ serve(async (req) => {
       console.log(`Processing page ${i + 1} of ${pageCount}...`)
       
       try {
-        // Get page dimensions
+        // Get page dimensions and draw it to a canvas
         const page = pdfDoc.getPages()[i]
         const { width, height } = page.getSize()
         
-        // Convert page to image data
-        console.log(`Converting page ${i + 1} to image data...`)
-        const scale = 2 // Increase resolution
-        const imageData = await page.render({
-          width: Math.floor(width * scale),
-          height: Math.floor(height * scale)
-        }).toImageData()
-
-        // Convert image data to PNG bytes
-        console.log(`Converting image data to PNG for page ${i + 1}...`)
-        const pngBytes = new Uint8Array(imageData.data.buffer)
+        // Create a new PDF document for this single page
+        const singlePagePdf = await PDFDocument.create()
+        const [copiedPage] = await singlePagePdf.copyPages(pdfDoc, [i])
+        singlePagePdf.addPage(copiedPage)
+        
+        // Convert to bytes
+        console.log(`Converting page ${i + 1} to bytes...`)
+        const pdfBytes = await singlePagePdf.save()
+        const pngBytes = new Uint8Array(pdfBytes)
 
         // Process with Textract
         console.log(`Sending page ${i + 1} to Textract...`)
