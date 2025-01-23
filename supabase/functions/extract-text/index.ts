@@ -1,11 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 import { 
-  S3Client,
-  GetObjectCommand,
-  PutObjectCommand,
-} from "npm:@aws-sdk/client-s3"
-import { 
   TextractClient, 
   AnalyzeDocumentCommand,
 } from "npm:@aws-sdk/client-textract"
@@ -29,16 +24,8 @@ serve(async (req) => {
       throw new Error('No fileId provided')
     }
 
-    // Initialize clients
-    console.log("Initializing AWS clients...")
-    const s3Client = new S3Client({
-      region: Deno.env.get('AWS_REGION') ?? 'ap-south-1',
-      credentials: {
-        accessKeyId: Deno.env.get('AWS_ACCESS_KEY_ID') ?? '',
-        secretAccessKey: Deno.env.get('AWS_SECRET_ACCESS_KEY') ?? '',
-      },
-    })
-
+    // Initialize Textract client
+    console.log("Initializing Textract client...")
     const textract = new TextractClient({
       region: Deno.env.get('AWS_REGION') ?? 'ap-south-1',
       credentials: {
