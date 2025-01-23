@@ -1,74 +1,26 @@
 import React, { useCallback, useState } from "react";
-import { useDropzone } from "react-dropzone";
-import { Upload, File, Image, X, CheckCircle2, Loader2 } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Progress } from "@/components/ui/progress";
-
-interface FileUploadProps {
-  onFileSelect: (file: File | null) => void;
-  onUploadSuccess: (fileId: string) => void;
-  onReset: () => void;
-}
+import { supabase } from "@/integrations/supabase/client";
+import { UploadZone } from "./UploadZone";
+import { validateFile, uploadFileToSupabase } from "@/utils/fileUtils";
+import type { FileUploadProps } from "@/types/file";
 
 export const FileUpload = ({ onFileSelect, onUploadSuccess, onReset }: FileUploadProps) => {
   const [uploadState, setUploadState] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState<string>("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [isDragActive, setIsDragActive] = useState(false);
   const { toast } = useToast();
 
-  const validateFile = (file: File) => {
-    console.log("Validating file:", file.name);
-    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png'];
-    if (!allowedTypes.includes(file.type)) {
-      setErrorMessage("Only PDF, JPEG, and PNG files are allowed");
-      return false;
-    }
-    if (file.size > 5 * 1024 * 1024) { // 5MB
-      setErrorMessage("Maximum file size is 5MB");
-      return false;
-    }
-    return true;
-  };
-
-  const uploadFile = async (file: File) => {
+  const handleUpload = async (file: File) => {
     try {
-      console.log("Starting file upload:", file.name);
       setUploadState('uploading');
       setUploadProgress(0);
-
-      // Create a unique file path
-      const fileExt = file.name.split('.').pop();
-      const filePath = `${crypto.randomUUID()}.${fileExt}`;
-
-      // Upload to Supabase Storage
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('temp_pdfs')
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: false
-        });
-
-      if (uploadError) throw uploadError;
-
-      console.log("File uploaded successfully, creating database record");
-
-      // Create database record
-      const { data: fileRecord, error: dbError } = await supabase
-        .from('uploaded_files')
-        .insert({
-          filename: file.name,
-          file_path: filePath,
-          content_type: file.type,
-          size: file.size
-        })
-        .select()
-        .single();
-
-      if (dbError) throw dbError;
-
+      
+      const fileRecord = await uploadFileToSupabase(file, supabase);
+      
       setUploadState('success');
       setUploadProgress(100);
       onUploadSuccess(fileRecord.id);
@@ -89,19 +41,20 @@ export const FileUpload = ({ onFileSelect, onUploadSuccess, onReset }: FileUploa
   };
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
-    console.log("File dropped:", acceptedFiles[0]?.name);
     const file = acceptedFiles[0];
     if (!file) return;
 
     setErrorMessage("");
-    if (!validateFile(file)) {
+    const validation = validateFile(file);
+    if (!validation.isValid) {
+      setErrorMessage(validation.error || "Invalid file");
       setUploadState('error');
       return;
     }
 
     setSelectedFile(file);
     onFileSelect(file);
-    await uploadFile(file);
+    await handleUpload(file);
   }, [onFileSelect, onUploadSuccess]);
 
   const handleReset = () => {
@@ -113,72 +66,14 @@ export const FileUpload = ({ onFileSelect, onUploadSuccess, onReset }: FileUploa
     onReset();
   };
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
-    accept: {
-      'application/pdf': ['.pdf'],
-      'image/jpeg': ['.jpg', '.jpeg'],
-      'image/png': ['.png']
-    },
-    multiple: false,
-  });
-
-  const getFileIcon = () => {
-    if (!selectedFile) return <Upload className="w-12 h-12 text-gray-400" />;
-    if (selectedFile.type === 'application/pdf') {
-      return <File className="w-12 h-12 text-medical-bright" />;
-    }
-    return <Image className="w-12 h-12 text-medical-bright" />;
-  };
-
   return (
     <div className="space-y-4">
-      <div
-        {...getRootProps()}
-        className={cn(
-          "w-full p-8 border-2 border-dashed rounded-lg transition-all duration-200 cursor-pointer",
-          "hover:border-medical-sky hover:bg-medical-soft/10",
-          isDragActive ? "border-medical-bright bg-medical-soft/20" : "border-gray-300",
-          uploadState === 'error' && "border-red-500 bg-red-50",
-          uploadState === 'success' && "border-green-500 bg-green-50",
-          "animate-fade-in"
-        )}
-      >
-        <input {...getInputProps()} />
-        <div className="flex flex-col items-center justify-center space-y-4">
-          {uploadState === 'uploading' ? (
-            <Loader2 className="w-12 h-12 text-medical-bright animate-spin" />
-          ) : uploadState === 'success' ? (
-            <CheckCircle2 className="w-12 h-12 text-green-500" />
-          ) : uploadState === 'error' ? (
-            <X className="w-12 h-12 text-red-500" />
-          ) : (
-            getFileIcon()
-          )}
-
-          <div className="text-center">
-            {selectedFile ? (
-              <>
-                <p className="text-lg font-medium text-gray-700">
-                  {selectedFile.name}
-                </p>
-                <p className="text-sm text-gray-500">
-                  {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB
-                </p>
-              </>
-            ) : (
-              <>
-                <p className="text-lg font-medium text-gray-700">
-                  Drop your file here
-                </p>
-                <p className="text-sm text-gray-500">
-                  Accepts PDF, JPEG, and PNG files (max 5MB)
-                </p>
-              </>
-            )}
-          </div>
-        </div>
-      </div>
+      <UploadZone
+        onDrop={onDrop}
+        uploadState={uploadState}
+        selectedFile={selectedFile}
+        isDragActive={isDragActive}
+      />
 
       {uploadState === 'uploading' && (
         <div className="w-full space-y-2">

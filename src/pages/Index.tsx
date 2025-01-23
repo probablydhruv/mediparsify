@@ -47,19 +47,23 @@ const Index = () => {
     console.log("Processing file ID:", fileId);
 
     try {
-      const { data, error } = await supabase.functions.invoke('extract-text', {
-        body: { fileId }
-      });
+      const { data: fileData } = await supabase
+        .from('uploaded_files')
+        .select('*')
+        .eq('id', fileId)
+        .single();
 
-      if (error) throw error;
+      if (fileData) {
+        const { data } = supabase.storage
+          .from('temp_pdfs')
+          .getPublicUrl(fileData.file_path);
 
-      console.log("File processing successful");
-      setFileUrl(data.url);
-      
-      toast({
-        title: "Success!",
-        description: "File processed successfully.",
-      });
+        setFileUrl(data.publicUrl);
+        toast({
+          title: "Success!",
+          description: "File URL generated successfully.",
+        });
+      }
     } catch (error) {
       console.error("Processing error:", error);
       toast({
@@ -102,7 +106,7 @@ const Index = () => {
                 Processing File...
               </>
             ) : isUploaded ? (
-              "Process File"
+              "Get File URL"
             ) : (
               "Upload File"
             )}
