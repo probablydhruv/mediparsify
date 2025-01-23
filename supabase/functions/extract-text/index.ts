@@ -9,7 +9,7 @@ const corsHeaders = {
 
 console.log('Extract text function initialized');
 
-export const handler = async (req: Request) => {
+serve(async (req: Request) => {
   console.log('Extract text function called');
 
   if (req.method === 'OPTIONS') {
@@ -23,6 +23,8 @@ export const handler = async (req: Request) => {
     const file = formData.get('file');
     const language = formData.get('language') || 'en';
 
+    console.log('Received file:', file ? 'yes' : 'no', 'Language:', language);
+
     if (!file) {
       console.error('No file uploaded');
       return new Response(
@@ -31,11 +33,14 @@ export const handler = async (req: Request) => {
       );
     }
 
-    console.log('File received:', (file as any).name, 'Size:', (file as any).size, 'Language:', language);
-
     // Check AWS credentials
     const awsAccessKeyId = Deno.env.get('AWS_ACCESS_KEY_ID');
     const awsSecretAccessKey = Deno.env.get('AWS_SECRET_ACCESS_KEY');
+
+    console.log('AWS credentials check:', 
+      awsAccessKeyId ? 'Access key present' : 'Access key missing',
+      awsSecretAccessKey ? 'Secret key present' : 'Secret key missing'
+    );
 
     if (!awsAccessKeyId || !awsSecretAccessKey) {
       console.error('AWS credentials not found or invalid');
@@ -45,8 +50,7 @@ export const handler = async (req: Request) => {
       );
     }
 
-    console.log('AWS credentials verified successfully');
-
+    console.log('Initializing TextractClient...');
     const textractClient = new TextractClient({
       region: "us-east-1",
       credentials: {
@@ -55,15 +59,11 @@ export const handler = async (req: Request) => {
       },
     });
 
-    console.log('TextractClient initialized');
-
     // Get the file data as a Uint8Array
     console.log('Converting file to buffer...');
     const fileData = await (file as unknown as Blob).arrayBuffer();
     const buffer = new Uint8Array(fileData);
-    console.log('File converted to buffer successfully');
 
-    // Process with AWS Textract
     console.log('Sending to AWS Textract...');
     const command = new DetectDocumentTextCommand({
       Document: {
@@ -75,7 +75,6 @@ export const handler = async (req: Request) => {
     const textractResponse = await textractClient.send(command);
     console.log('Received Textract response:', JSON.stringify(textractResponse, null, 2));
 
-    // Extract text from Textract response
     const extractedText = textractResponse.Blocks?.filter(block => block.BlockType === 'LINE')
       .map(block => block.Text)
       .join('\n') || '';
@@ -88,10 +87,7 @@ export const handler = async (req: Request) => {
         extractedText,
         language
       }),
-      { 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200 
-      }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     );
 
   } catch (error) {
@@ -101,10 +97,7 @@ export const handler = async (req: Request) => {
         error: 'Failed to process file',
         details: error.message 
       }),
-      { 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 500 
-      }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     );
   }
-};
+});

@@ -34,59 +34,73 @@ const Index = () => {
     setIsUploaded(true);
     setFileId(id);
     
-    // Get the file data to send to the edge function
-    const { data: fileData } = await supabase
-      .from('uploaded_files')
-      .select('*')
-      .eq('id', id)
-      .single();
+    try {
+      // Get the file data to send to the edge function
+      const { data: fileData } = await supabase
+        .from('uploaded_files')
+        .select('*')
+        .eq('id', id)
+        .single();
 
-    if (fileData) {
-      const { data } = supabase.storage
-        .from('temp_pdfs')
-        .getPublicUrl(fileData.file_path);
+      console.log("Retrieved file data:", fileData);
 
-      // Download the file to send to the edge function
-      const fileResponse = await fetch(data.publicUrl);
-      const fileBlob = await fileResponse.blob();
+      if (fileData) {
+        const { data } = supabase.storage
+          .from('temp_pdfs')
+          .getPublicUrl(fileData.file_path);
 
-      // Create FormData with the file
-      const formData = new FormData();
-      formData.append('file', fileBlob, fileData.filename);
-      formData.append('language', selectedLanguage);
+        setFileUrl(data.publicUrl);
 
-      try {
-        console.log("Calling extract-text function...");
-        const { data: extractResponse, error } = await supabase.functions.invoke('extract-text', {
-          body: formData,
-        });
+        // Download the file to send to the edge function
+        console.log("Downloading file from URL:", data.publicUrl);
+        const fileResponse = await fetch(data.publicUrl);
+        const fileBlob = await fileResponse.blob();
 
-        if (error) {
-          console.error("Edge function error:", error);
+        // Create FormData with the file
+        const formData = new FormData();
+        formData.append('file', fileBlob, fileData.filename);
+        formData.append('language', selectedLanguage);
+
+        try {
+          console.log("Calling extract-text function...");
+          const { data: extractResponse, error } = await supabase.functions.invoke('extract-text', {
+            body: formData,
+          });
+
+          if (error) {
+            console.error("Edge function error:", error);
+            toast({
+              title: "Processing Failed",
+              description: "Failed to process the file. Please try again.",
+              variant: "destructive",
+            });
+            return;
+          }
+
+          console.log("Extract text response:", extractResponse);
+          if (extractResponse.extractedText) {
+            setExtractedText(extractResponse.extractedText);
+            toast({
+              title: "Success!",
+              description: "Text extracted successfully.",
+            });
+          }
+        } catch (error) {
+          console.error("Processing error:", error);
           toast({
             title: "Processing Failed",
             description: "Failed to process the file. Please try again.",
             variant: "destructive",
           });
-          return;
         }
-
-        console.log("Extract text response:", extractResponse);
-        if (extractResponse.extractedText) {
-          setExtractedText(extractResponse.extractedText);
-          toast({
-            title: "Success!",
-            description: "Text extracted successfully.",
-          });
-        }
-      } catch (error) {
-        console.error("Processing error:", error);
-        toast({
-          title: "Processing Failed",
-          description: "Failed to process the file. Please try again.",
-          variant: "destructive",
-        });
       }
+    } catch (error) {
+      console.error("Error processing file:", error);
+      toast({
+        title: "Processing Failed",
+        description: "Failed to process the file. Please try again.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -99,49 +113,6 @@ const Index = () => {
     setExtractedText("");
   };
 
-  const handleProcess = async () => {
-    if (!fileId) {
-      toast({
-        title: "Error",
-        description: "No file selected for processing",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsProcessing(true);
-    console.log("Processing file ID:", fileId);
-
-    try {
-      const { data: fileData } = await supabase
-        .from('uploaded_files')
-        .select('*')
-        .eq('id', fileId)
-        .single();
-
-      if (fileData) {
-        const { data } = supabase.storage
-          .from('temp_pdfs')
-          .getPublicUrl(fileData.file_path);
-
-        setFileUrl(data.publicUrl);
-        toast({
-          title: "Success!",
-          description: "File URL generated successfully.",
-        });
-      }
-    } catch (error) {
-      console.error("Processing error:", error);
-      toast({
-        title: "Processing Failed",
-        description: "Failed to process the file. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
   return (
     <div className="min-h-screen bg-white p-4 md:p-8">
       <div className="max-w-3xl mx-auto space-y-8 animate-fade-in">
@@ -150,7 +121,7 @@ const Index = () => {
             mediparsify
           </h1>
           <p className="text-gray-600">
-            Upload your PDF file to store it securely
+            Upload your PDF file to extract text
           </p>
         </div>
 
@@ -162,67 +133,48 @@ const Index = () => {
           />
         </div>
 
-        <div className="space-y-4">
-          {fileUrl && (
-            <div className="mt-4 p-4 bg-gray-50 rounded-lg space-y-4">
-              <div>
-                <h3 className="text-lg font-semibold mb-2">File URL:</h3>
-                <a 
-                  href={fileUrl} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="text-blue-500 hover:text-blue-700 break-all"
-                >
-                  {fileUrl}
-                </a>
-              </div>
-
-              {extractedText && (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-semibold">Extracted Text:</h3>
-                    <Select
-                      value={selectedLanguage}
-                      onValueChange={setSelectedLanguage}
-                    >
-                      <SelectTrigger className="w-[180px]">
-                        <SelectValue placeholder="Select Language" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="en">English</SelectItem>
-                        <SelectItem value="es">Spanish</SelectItem>
-                        <SelectItem value="fr">French</SelectItem>
-                        <SelectItem value="de">German</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="bg-white p-4 rounded-md border border-gray-200">
-                    <pre className="whitespace-pre-wrap font-mono text-sm">
-                      {extractedText}
-                    </pre>
-                  </div>
-                </div>
-              )}
+        {fileUrl && (
+          <div className="mt-4 p-4 bg-gray-50 rounded-lg space-y-4">
+            <div>
+              <h3 className="text-lg font-semibold mb-2">File URL:</h3>
+              <a 
+                href={fileUrl} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-blue-500 hover:text-blue-700 break-all"
+              >
+                {fileUrl}
+              </a>
             </div>
-          )}
 
-          <Button
-            onClick={handleProcess}
-            disabled={!isUploaded || isProcessing}
-            className="w-full bg-medical-bright hover:bg-medical-sky text-white transition-colors"
-          >
-            {isProcessing ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Processing File...
-              </>
-            ) : isUploaded ? (
-              "Get File URL"
-            ) : (
-              "Upload File"
+            {extractedText && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold">Extracted Text:</h3>
+                  <Select
+                    value={selectedLanguage}
+                    onValueChange={setSelectedLanguage}
+                  >
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="Select Language" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="en">English</SelectItem>
+                      <SelectItem value="es">Spanish</SelectItem>
+                      <SelectItem value="fr">French</SelectItem>
+                      <SelectItem value="de">German</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="bg-white p-4 rounded-md border border-gray-200">
+                  <pre className="whitespace-pre-wrap font-mono text-sm">
+                    {extractedText}
+                  </pre>
+                </div>
+              </div>
             )}
-          </Button>
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );
