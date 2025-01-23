@@ -1,11 +1,14 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 import { 
+  S3Client,
+  PutObjectCommand,
+} from "npm:@aws-sdk/client-s3"
+import { 
   TextractClient, 
   StartDocumentAnalysisCommand,
   GetDocumentAnalysisCommand,
-  StartDocumentAnalysisCommandInput
-} from "npm:@aws-sdk/client-textract";
+} from "npm:@aws-sdk/client-textract"
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -19,7 +22,7 @@ serve(async (req) => {
 
   try {
     const { fileId } = await req.json()
-    console.log('Processing file ID:', fileId)
+    console.log('Starting text extraction process for file ID:', fileId)
 
     // Initialize Supabase Admin client
     const supabaseAdmin = createClient(
@@ -39,124 +42,147 @@ serve(async (req) => {
       throw new Error('File not found')
     }
 
-    console.log('File data retrieved:', {
+    console.log('Retrieved file metadata:', {
       filename: fileData.filename,
       path: fileData.file_path,
-      size: fileData.size,
-      contentType: fileData.content_type
+      size: fileData.size
     })
 
-    // Get the file from storage
+    // Download file from Supabase Storage
     const { data: fileBytes, error: downloadError } = await supabaseAdmin
       .storage
       .from('temp_pdfs')
       .download(fileData.file_path)
 
     if (downloadError || !fileBytes) {
-      console.error('Error downloading file:', downloadError)
-      throw new Error('Could not download file')
+      console.error('Error downloading file from Supabase:', downloadError)
+      throw new Error('Could not download file from Supabase storage')
     }
 
-    console.log('File downloaded successfully, size:', fileBytes.size)
+    console.log('Successfully downloaded file from Supabase storage')
 
-    // Initialize AWS Textract client
-    const textract = new TextractClient({
-      region: "us-east-1",
+    // Initialize AWS clients
+    const s3Client = new S3Client({
+      region: Deno.env.get('AWS_REGION') ?? 'ap-south-1',
       credentials: {
         accessKeyId: Deno.env.get('AWS_ACCESS_KEY_ID') ?? '',
         secretAccessKey: Deno.env.get('AWS_SECRET_ACCESS_KEY') ?? '',
       },
-    });
+    })
 
-    console.log('AWS Textract client initialized')
-
-    // Convert blob to ArrayBuffer and then to Uint8Array
-    const arrayBuffer = await fileBytes.arrayBuffer()
-    const documentBytes = new Uint8Array(arrayBuffer)
-
-    // Start asynchronous document analysis
-    const startAnalysisInput: StartDocumentAnalysisCommandInput = {
-      DocumentLocation: {
-        S3Object: {
-          Bucket: 'temp_pdfs',
-          Name: fileData.file_path
-        }
+    const textract = new TextractClient({
+      region: Deno.env.get('AWS_REGION') ?? 'ap-south-1',
+      credentials: {
+        accessKeyId: Deno.env.get('AWS_ACCESS_KEY_ID') ?? '',
+        secretAccessKey: Deno.env.get('AWS_SECRET_ACCESS_KEY') ?? '',
       },
-      FeatureTypes: ['FORMS', 'TABLES']
-    };
+    })
 
-    console.log('Starting document analysis with input:', startAnalysisInput)
+    // Upload to S3
+    console.log('Starting file transfer to S3...')
+    const s3Key = `uploads/${fileData.file_path}`
+    
+    try {
+      const arrayBuffer = await fileBytes.arrayBuffer()
+      const uploadCommand = new PutObjectCommand({
+        Bucket: Deno.env.get('AWS_S3_BUCKET_NAME'),
+        Key: s3Key,
+        Body: new Uint8Array(arrayBuffer),
+        ContentType: fileData.content_type,
+      })
 
-    const startCommand = new StartDocumentAnalysisCommand(startAnalysisInput);
-    const startResponse = await textract.send(startCommand);
-
-    if (!startResponse.JobId) {
-      throw new Error('Failed to start document analysis');
+      await s3Client.send(uploadCommand)
+      console.log('File successfully uploaded to S3:', s3Key)
+    } catch (s3Error) {
+      console.error('S3 upload error:', s3Error)
+      throw new Error('Failed to upload file to S3')
     }
 
-    console.log('Analysis started with JobId:', startResponse.JobId);
-
-    // Poll for completion (with timeout)
-    const maxAttempts = 30;
-    let attempts = 0;
-    let extractedText = '';
-
-    while (attempts < maxAttempts) {
-      const getCommand = new GetDocumentAnalysisCommand({
-        JobId: startResponse.JobId
-      });
-
-      const getResponse = await textract.send(getCommand);
-      console.log('Job status:', getResponse.JobStatus);
-
-      if (getResponse.JobStatus === 'SUCCEEDED') {
-        // Process blocks similar to before, but handle pagination
-        let blocks = getResponse.Blocks || [];
-        
-        blocks.forEach((block) => {
-          if (block.BlockType === 'LINE') {
-            extractedText += (block.Text || '') + '\n';
-          } else if (block.BlockType === 'CELL') {
-            extractedText += (block.Text || '') + '\t';
+    // Start Textract processing
+    console.log('Initiating Textract processing...')
+    try {
+      const startCommand = new StartDocumentAnalysisCommand({
+        DocumentLocation: {
+          S3Object: {
+            Bucket: Deno.env.get('AWS_S3_BUCKET_NAME'),
+            Name: s3Key
           }
-        });
+        },
+        FeatureTypes: ['FORMS', 'TABLES']
+      })
 
-        // Handle pagination if NextToken exists
-        while (getResponse.NextToken) {
-          const nextPageCommand = new GetDocumentAnalysisCommand({
-            JobId: startResponse.JobId,
-            NextToken: getResponse.NextToken
-          });
-          const nextPageResponse = await textract.send(nextPageCommand);
-          nextPageResponse.Blocks?.forEach((block) => {
-            if (block.BlockType === 'LINE') {
-              extractedText += (block.Text || '') + '\n';
-            } else if (block.BlockType === 'CELL') {
-              extractedText += (block.Text || '') + '\t';
-            }
-          });
-        }
-
-        break;
-      } else if (getResponse.JobStatus === 'FAILED') {
-        throw new Error('Document analysis failed');
+      const startResponse = await textract.send(startCommand)
+      
+      if (!startResponse.JobId) {
+        throw new Error('Failed to start Textract analysis')
       }
 
-      // Wait before next attempt
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      attempts++;
+      console.log('Textract job started with ID:', startResponse.JobId)
+
+      // Poll for completion
+      const maxAttempts = 30
+      let attempts = 0
+      let extractedText = ''
+
+      while (attempts < maxAttempts) {
+        const getCommand = new GetDocumentAnalysisCommand({
+          JobId: startResponse.JobId
+        })
+
+        const getResponse = await textract.send(getCommand)
+        console.log('Textract job status:', getResponse.JobStatus)
+
+        if (getResponse.JobStatus === 'SUCCEEDED') {
+          let blocks = getResponse.Blocks || []
+          
+          blocks.forEach((block) => {
+            if (block.BlockType === 'LINE') {
+              extractedText += (block.Text || '') + '\n'
+            } else if (block.BlockType === 'CELL') {
+              extractedText += (block.Text || '') + '\t'
+            }
+          })
+
+          while (getResponse.NextToken) {
+            const nextPageCommand = new GetDocumentAnalysisCommand({
+              JobId: startResponse.JobId,
+              NextToken: getResponse.NextToken
+            })
+            const nextPageResponse = await textract.send(nextPageCommand)
+            nextPageResponse.Blocks?.forEach((block) => {
+              if (block.BlockType === 'LINE') {
+                extractedText += (block.Text || '') + '\n'
+              } else if (block.BlockType === 'CELL') {
+                extractedText += (block.Text || '') + '\t'
+              }
+            })
+          }
+
+          console.log('Textract processing complete')
+          break
+        } else if (getResponse.JobStatus === 'FAILED') {
+          console.error('Textract job failed')
+          throw new Error('Document analysis failed')
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        attempts++
+      }
+
+      if (attempts >= maxAttempts) {
+        throw new Error('Document analysis timed out')
+      }
+
+      return new Response(
+        JSON.stringify({ text: extractedText }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+
+    } catch (textractError) {
+      console.error('Textract processing error:', textractError)
+      throw new Error('Failed to process document with Textract')
     }
 
-    if (attempts >= maxAttempts) {
-      throw new Error('Document analysis timed out');
-    }
-
-    console.log('Text extraction completed successfully');
-
-    return new Response(
-      JSON.stringify({ text: extractedText }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
   } catch (error) {
     console.error('Detailed error in extract-text function:', {
       name: error.name,
