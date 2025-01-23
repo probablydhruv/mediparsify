@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from "react";
 import { useDropzone } from "react-dropzone";
-import { Upload, File, X, CheckCircle2, Loader2 } from "lucide-react";
+import { Upload, File, Image, X, CheckCircle2, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -21,8 +21,9 @@ export const FileUpload = ({ onFileSelect, onUploadSuccess, onReset }: FileUploa
 
   const validateFile = (file: File) => {
     console.log("Validating file:", file.name);
-    if (file.type !== 'application/pdf') {
-      setErrorMessage("Only PDF files are allowed");
+    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png'];
+    if (!allowedTypes.includes(file.type)) {
+      setErrorMessage("Only PDF, JPEG, and PNG files are allowed");
       return false;
     }
     if (file.size > 5 * 1024 * 1024) { // 5MB
@@ -116,9 +117,19 @@ export const FileUpload = ({ onFileSelect, onUploadSuccess, onReset }: FileUploa
     onDrop,
     accept: {
       'application/pdf': ['.pdf'],
+      'image/jpeg': ['.jpg', '.jpeg'],
+      'image/png': ['.png']
     },
     multiple: false,
   });
+
+  const getFileIcon = () => {
+    if (!selectedFile) return <Upload className="w-12 h-12 text-gray-400" />;
+    if (selectedFile.type === 'application/pdf') {
+      return <File className="w-12 h-12 text-medical-bright" />;
+    }
+    return <Image className="w-12 h-12 text-medical-bright" />;
+  };
 
   return (
     <div className="space-y-4">
@@ -141,10 +152,8 @@ export const FileUpload = ({ onFileSelect, onUploadSuccess, onReset }: FileUploa
             <CheckCircle2 className="w-12 h-12 text-green-500" />
           ) : uploadState === 'error' ? (
             <X className="w-12 h-12 text-red-500" />
-          ) : selectedFile ? (
-            <File className="w-12 h-12 text-medical-bright" />
           ) : (
-            <Upload className="w-12 h-12 text-gray-400" />
+            getFileIcon()
           )}
 
           <div className="text-center">
@@ -160,10 +169,10 @@ export const FileUpload = ({ onFileSelect, onUploadSuccess, onReset }: FileUploa
             ) : (
               <>
                 <p className="text-lg font-medium text-gray-700">
-                  Drop your prescription PDF here
+                  Drop your file here
                 </p>
                 <p className="text-sm text-gray-500">
-                  or click to select a file
+                  Accepts PDF, JPEG, and PNG files (max 5MB)
                 </p>
               </>
             )}
