@@ -25,16 +25,6 @@ serve(async (req) => {
       throw new Error('No fileId provided')
     }
 
-    // Initialize Textract client
-    console.log("Initializing Textract client...")
-    const textract = new TextractClient({
-      region: Deno.env.get('AWS_REGION') ?? 'ap-south-1',
-      credentials: {
-        accessKeyId: Deno.env.get('AWS_ACCESS_KEY_ID') ?? '',
-        secretAccessKey: Deno.env.get('AWS_SECRET_ACCESS_KEY') ?? '',
-      },
-    })
-
     // Initialize Supabase client
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -74,7 +64,17 @@ serve(async (req) => {
 
     // Convert file to buffer
     const buffer = await fileBytes.arrayBuffer()
-    
+
+    // Initialize Textract client
+    console.log("Initializing Textract client...")
+    const textract = new TextractClient({
+      region: Deno.env.get('AWS_REGION') ?? 'ap-south-1',
+      credentials: {
+        accessKeyId: Deno.env.get('AWS_ACCESS_KEY_ID') ?? '',
+        secretAccessKey: Deno.env.get('AWS_SECRET_ACCESS_KEY') ?? '',
+      },
+    })
+
     // Start asynchronous document analysis
     console.log("Starting document analysis with Textract...")
     try {
