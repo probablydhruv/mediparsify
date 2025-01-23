@@ -3,9 +3,11 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 import { 
   S3Client,
   PutObjectCommand,
+  ListBucketsCommand
 } from "npm:@aws-sdk/client-s3"
 import { 
   TextractClient, 
+  DetectDocumentTextCommand,
   StartDocumentAnalysisCommand,
   GetDocumentAnalysisCommand,
 } from "npm:@aws-sdk/client-textract"
@@ -22,9 +24,37 @@ serve(async (req) => {
 
   try {
     const { fileId } = await req.json()
-    console.log('Starting text extraction process for file ID:', fileId)
+    console.log('Starting AWS service verification for file ID:', fileId)
 
-    // Initialize Supabase Admin client
+    // Initialize AWS clients
+    const s3Client = new S3Client({
+      region: Deno.env.get('AWS_REGION') ?? 'ap-south-1',
+      credentials: {
+        accessKeyId: Deno.env.get('AWS_ACCESS_KEY_ID') ?? '',
+        secretAccessKey: Deno.env.get('AWS_SECRET_ACCESS_KEY') ?? '',
+      },
+    })
+
+    const textract = new TextractClient({
+      region: Deno.env.get('AWS_REGION') ?? 'ap-south-1',
+      credentials: {
+        accessKeyId: Deno.env.get('AWS_ACCESS_KEY_ID') ?? '',
+        secretAccessKey: Deno.env.get('AWS_SECRET_ACCESS_KEY') ?? '',
+      },
+    })
+
+    // Test S3 access
+    console.log('Testing S3 access...')
+    try {
+      const listBucketsCommand = new ListBucketsCommand({})
+      const listBucketsResponse = await s3Client.send(listBucketsCommand)
+      console.log('S3 Buckets:', listBucketsResponse.Buckets?.map(b => b.Name))
+    } catch (s3Error) {
+      console.error('S3 access test failed:', s3Error)
+      throw new Error(`S3 access failed: ${s3Error.message}`)
+    }
+
+    // Initialize Supabase client
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -59,25 +89,6 @@ serve(async (req) => {
       throw new Error('Could not download file from Supabase storage')
     }
 
-    console.log('Successfully downloaded file from Supabase storage')
-
-    // Initialize AWS clients
-    const s3Client = new S3Client({
-      region: Deno.env.get('AWS_REGION') ?? 'ap-south-1',
-      credentials: {
-        accessKeyId: Deno.env.get('AWS_ACCESS_KEY_ID') ?? '',
-        secretAccessKey: Deno.env.get('AWS_SECRET_ACCESS_KEY') ?? '',
-      },
-    })
-
-    const textract = new TextractClient({
-      region: Deno.env.get('AWS_REGION') ?? 'ap-south-1',
-      credentials: {
-        accessKeyId: Deno.env.get('AWS_ACCESS_KEY_ID') ?? '',
-        secretAccessKey: Deno.env.get('AWS_SECRET_ACCESS_KEY') ?? '',
-      },
-    })
-
     // Upload to S3
     console.log('Starting file transfer to S3...')
     const s3Key = `uploads/${fileData.file_path}`
@@ -95,11 +106,11 @@ serve(async (req) => {
       console.log('File successfully uploaded to S3:', s3Key)
     } catch (s3Error) {
       console.error('S3 upload error:', s3Error)
-      throw new Error('Failed to upload file to S3')
+      throw new Error(`Failed to upload file to S3: ${s3Error.message}`)
     }
 
-    // Start Textract processing
-    console.log('Initiating Textract processing...')
+    // Test Textract access with a simple detect text operation
+    console.log('Testing Textract access...')
     try {
       const startCommand = new StartDocumentAnalysisCommand({
         DocumentLocation: {
@@ -112,12 +123,11 @@ serve(async (req) => {
       })
 
       const startResponse = await textract.send(startCommand)
+      console.log('Textract job started successfully with ID:', startResponse.JobId)
       
       if (!startResponse.JobId) {
         throw new Error('Failed to start Textract analysis')
       }
-
-      console.log('Textract job started with ID:', startResponse.JobId)
 
       // Poll for completion
       const maxAttempts = 30
@@ -134,43 +144,19 @@ serve(async (req) => {
 
         if (getResponse.JobStatus === 'SUCCEEDED') {
           let blocks = getResponse.Blocks || []
-          
           blocks.forEach((block) => {
             if (block.BlockType === 'LINE') {
               extractedText += (block.Text || '') + '\n'
-            } else if (block.BlockType === 'CELL') {
-              extractedText += (block.Text || '') + '\t'
             }
           })
-
-          while (getResponse.NextToken) {
-            const nextPageCommand = new GetDocumentAnalysisCommand({
-              JobId: startResponse.JobId,
-              NextToken: getResponse.NextToken
-            })
-            const nextPageResponse = await textract.send(nextPageCommand)
-            nextPageResponse.Blocks?.forEach((block) => {
-              if (block.BlockType === 'LINE') {
-                extractedText += (block.Text || '') + '\n'
-              } else if (block.BlockType === 'CELL') {
-                extractedText += (block.Text || '') + '\t'
-              }
-            })
-          }
-
           console.log('Textract processing complete')
           break
         } else if (getResponse.JobStatus === 'FAILED') {
-          console.error('Textract job failed')
           throw new Error('Document analysis failed')
         }
 
         await new Promise(resolve => setTimeout(resolve, 1000))
         attempts++
-      }
-
-      if (attempts >= maxAttempts) {
-        throw new Error('Document analysis timed out')
       }
 
       return new Response(
@@ -180,7 +166,7 @@ serve(async (req) => {
 
     } catch (textractError) {
       console.error('Textract processing error:', textractError)
-      throw new Error('Failed to process document with Textract')
+      throw new Error(`Failed to process document with Textract: ${textractError.message}`)
     }
 
   } catch (error) {
