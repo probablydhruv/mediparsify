@@ -1,18 +1,101 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
-import OpenAI from "https://esm.sh/openai@4.20.1";
+import { 
+  TextractClient, 
+  StartDocumentTextDetectionCommand,
+  GetDocumentTextDetectionCommand
+} from "npm:@aws-sdk/client-textract";
+import { TranslateClient, TranslateTextCommand } from "npm:@aws-sdk/client-translate";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-serve(async (req) => {
-  console.log("Extract text function called");
+const textractClient = new TextractClient({
+  region: "us-east-1",
+  credentials: {
+    accessKeyId: Deno.env.get('AWS_ACCESS_KEY_ID') || '',
+    secretAccessKey: Deno.env.get('AWS_SECRET_ACCESS_KEY') || '',
+  },
+});
 
+const translateClient = new TranslateClient({
+  region: "us-east-1",
+  credentials: {
+    accessKeyId: Deno.env.get('AWS_ACCESS_KEY_ID') || '',
+    secretAccessKey: Deno.env.get('AWS_SECRET_ACCESS_KEY') || '',
+  },
+});
+
+async function waitForJobCompletion(jobId: string): Promise<string[]> {
+  console.log(`Waiting for job completion: ${jobId}`);
+  const textBlocks: string[] = [];
+  
+  while (true) {
+    const getCommand = new GetDocumentTextDetectionCommand({
+      JobId: jobId,
+    });
+
+    try {
+      const response = await textractClient.send(getCommand);
+      console.log("Job status:", response.JobStatus);
+
+      if (response.JobStatus === 'SUCCEEDED') {
+        response.Blocks?.forEach(block => {
+          if (block.BlockType === 'LINE' && block.Text) {
+            textBlocks.push(block.Text);
+          }
+        });
+
+        if (response.NextToken) {
+          const nextCommand = new GetDocumentTextDetectionCommand({
+            JobId: jobId,
+            NextToken: response.NextToken,
+          });
+          const nextResponse = await textractClient.send(nextCommand);
+          nextResponse.Blocks?.forEach(block => {
+            if (block.BlockType === 'LINE' && block.Text) {
+              textBlocks.push(block.Text);
+            }
+          });
+        }
+        break;
+      } else if (response.JobStatus === 'FAILED') {
+        throw new Error('Textract job failed');
+      }
+
+      // Wait for 2 seconds before checking again
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    } catch (error) {
+      console.error("Error checking job status:", error);
+      throw error;
+    }
+  }
+
+  return textBlocks;
+}
+
+async function translateText(text: string, targetLanguage: string): Promise<string> {
+  if (targetLanguage === 'en') return text;
+
+  try {
+    const command = new TranslateTextCommand({
+      Text: text,
+      SourceLanguageCode: 'en',
+      TargetLanguageCode: targetLanguage,
+    });
+
+    const response = await translateClient.send(command);
+    return response.TranslatedText || text;
+  } catch (error) {
+    console.error("Translation error:", error);
+    return text;
+  }
+}
+
+serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    console.log("Handling CORS preflight request");
     return new Response(null, { headers: corsHeaders });
   }
 
@@ -20,75 +103,59 @@ serve(async (req) => {
     console.log("Processing request...");
     const formData = await req.formData();
     const file = formData.get('file');
-    const language = formData.get('language') || 'en';
+    const language = formData.get('language')?.toString() || 'en';
 
-    console.log("Received file:", {
-      name: file?.name,
-      type: file?.type,
-      size: file?.size,
-      language: language
-    });
+    console.log("Received request with language:", language);
 
-    if (!file) {
-      console.error("No file provided in request");
+    if (!file || !(file instanceof File)) {
       throw new Error('No file provided');
     }
 
-    // Initialize OpenAI client
-    console.log("Initializing OpenAI client");
-    const openai = new OpenAI({
-      apiKey: Deno.env.get('OPENAI_API_KEY')
+    console.log("File details:", {
+      name: file.name,
+      type: file.type,
+      size: file.size
     });
-
-    if (!openai.apiKey) {
-      console.error("OpenAI API key not found");
-      throw new Error('OpenAI API key not configured');
-    }
 
     // Convert file to base64
-    console.log("Converting file to base64");
-    const fileBuffer = await file.arrayBuffer();
-    const base64String = btoa(String.fromCharCode(...new Uint8Array(fileBuffer)));
+    const buffer = await file.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
 
-    console.log("Sending request to OpenAI");
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "system",
-          content: `You are a helpful assistant that extracts and summarizes text from documents. Please extract the text from the following document and provide it in ${language} language.`
-        },
-        {
-          role: "user",
-          content: [
-            {
-              type: "text",
-              text: "Please extract and summarize the text from this document:"
-            },
-            {
-              type: "image_url",
-              image_url: {
-                url: `data:${file.type};base64,${base64String}`
-              }
-            }
-          ]
-        }
-      ],
-      max_tokens: 1000
+    // Start async document detection
+    const startCommand = new StartDocumentTextDetectionCommand({
+      DocumentLocation: {
+        Bytes: bytes
+      }
     });
 
-    console.log("Received response from OpenAI");
-    const extractedText = response.choices[0]?.message?.content;
-
-    if (!extractedText) {
-      console.error("No text extracted from OpenAI response");
-      throw new Error('Failed to extract text from document');
+    console.log("Starting document text detection...");
+    const startResponse = await textractClient.send(startCommand);
+    
+    if (!startResponse.JobId) {
+      throw new Error('Failed to start text detection job');
     }
 
-    console.log("Successfully extracted text, returning response");
+    console.log("Job started with ID:", startResponse.JobId);
+    
+    // Wait for job completion and get text blocks
+    const textBlocks = await waitForJobCompletion(startResponse.JobId);
+    const extractedText = textBlocks.join('\n');
+
+    console.log("Text extraction completed, translating...");
+    
+    // Translate the extracted text if needed
+    const translatedText = await translateText(extractedText, language);
+
+    console.log("Processing completed successfully");
+    
     return new Response(
-      JSON.stringify({ extractedText }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ extractedText: translatedText }),
+      { 
+        headers: { 
+          ...corsHeaders,
+          'Content-Type': 'application/json'
+        } 
+      }
     );
 
   } catch (error) {
@@ -100,7 +167,10 @@ serve(async (req) => {
       }),
       { 
         status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        headers: { 
+          ...corsHeaders,
+          'Content-Type': 'application/json'
+        } 
       }
     );
   }
