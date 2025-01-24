@@ -30,10 +30,12 @@ const translateClient = new TranslateClient({
 async function waitForJobCompletion(jobId: string): Promise<string[]> {
   console.log(`Waiting for job completion: ${jobId}`);
   const textBlocks: string[] = [];
+  let nextToken: string | undefined;
   
   while (true) {
     const getCommand = new GetDocumentTextDetectionCommand({
       JobId: jobId,
+      NextToken: nextToken
     });
 
     try {
@@ -41,23 +43,17 @@ async function waitForJobCompletion(jobId: string): Promise<string[]> {
       console.log("Job status:", response.JobStatus);
 
       if (response.JobStatus === 'SUCCEEDED') {
-        response.Blocks?.forEach(block => {
-          if (block.BlockType === 'LINE' && block.Text) {
-            textBlocks.push(block.Text);
-          }
-        });
-
-        if (response.NextToken) {
-          const nextCommand = new GetDocumentTextDetectionCommand({
-            JobId: jobId,
-            NextToken: response.NextToken,
-          });
-          const nextResponse = await textractClient.send(nextCommand);
-          nextResponse.Blocks?.forEach(block => {
+        if (response.Blocks) {
+          response.Blocks.forEach(block => {
             if (block.BlockType === 'LINE' && block.Text) {
               textBlocks.push(block.Text);
             }
           });
+        }
+
+        if (response.NextToken) {
+          nextToken = response.NextToken;
+          continue;
         }
         break;
       } else if (response.JobStatus === 'FAILED') {
@@ -117,7 +113,7 @@ serve(async (req) => {
       size: file.size
     });
 
-    // Convert file to base64
+    // Convert file to bytes array
     const buffer = await file.arrayBuffer();
     const bytes = new Uint8Array(buffer);
 
@@ -149,7 +145,10 @@ serve(async (req) => {
     console.log("Processing completed successfully");
     
     return new Response(
-      JSON.stringify({ extractedText: translatedText }),
+      JSON.stringify({ 
+        extractedText: translatedText,
+        rawText: extractedText // Including raw text for OpenAI processing
+      }),
       { 
         headers: { 
           ...corsHeaders,
