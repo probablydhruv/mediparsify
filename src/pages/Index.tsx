@@ -12,7 +12,6 @@ import {
 
 const Index = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  // const [isProcessing, setIsProcessing] = useState(false);
   const [isUploaded, setIsUploaded] = useState(false);
   const [fileId, setFileId] = useState<string>("");
   const [fileUrl, setFileUrl] = useState<string>("");
@@ -34,24 +33,33 @@ const Index = () => {
     
     try {
       // Get the file data to send to the edge function
-      const { data: fileData } = await supabase
+      const { data: fileData, error: fileError } = await supabase
         .from('uploaded_files')
         .select('*')
         .eq('id', id)
         .single();
 
+      if (fileError) {
+        console.error("Error fetching file data:", fileError);
+        throw fileError;
+      }
+
       console.log("Retrieved file data:", fileData);
 
       if (fileData) {
-        const { data } = supabase.storage
+        const { data: storageData } = supabase.storage
           .from('temp_pdfs')
           .getPublicUrl(fileData.file_path);
 
-        setFileUrl(data.publicUrl);
+        console.log("Generated public URL:", storageData.publicUrl);
+        setFileUrl(storageData.publicUrl);
 
         // Download the file to send to the edge function
-        console.log("Downloading file from URL:", data.publicUrl);
-        const fileResponse = await fetch(data.publicUrl);
+        console.log("Downloading file from URL:", storageData.publicUrl);
+        const fileResponse = await fetch(storageData.publicUrl);
+        if (!fileResponse.ok) {
+          throw new Error(`Failed to download file: ${fileResponse.statusText}`);
+        }
         const fileBlob = await fileResponse.blob();
 
         // Create FormData with the file
@@ -59,44 +67,38 @@ const Index = () => {
         formData.append('file', fileBlob, fileData.filename);
         formData.append('language', selectedLanguage);
 
-        try {
-          console.log("Calling extract-text function...");
-          const { data: extractResponse, error } = await supabase.functions.invoke('extract-text', {
-            body: formData,
-          });
+        console.log("Calling extract-text function with FormData:", {
+          filename: fileData.filename,
+          size: fileBlob.size,
+          type: fileBlob.type,
+          language: selectedLanguage
+        });
 
-          if (error) {
-            console.error("Edge function error:", error);
-            toast({
-              title: "Processing Failed",
-              description: "Failed to process the file. Please try again.",
-              variant: "destructive",
-            });
-            return;
-          }
+        const { data: extractResponse, error: functionError } = await supabase.functions.invoke('extract-text', {
+          body: formData,
+        });
 
-          console.log("Extract text response:", extractResponse);
-          if (extractResponse.extractedText) {
-            setExtractedText(extractResponse.extractedText);
-            toast({
-              title: "Success!",
-              description: "Text extracted successfully.",
-            });
-          }
-        } catch (error) {
-          console.error("Processing error:", error);
+        if (functionError) {
+          console.error("Edge function error:", functionError);
+          throw functionError;
+        }
+
+        console.log("Extract text response:", extractResponse);
+        if (extractResponse?.extractedText) {
+          setExtractedText(extractResponse.extractedText);
           toast({
-            title: "Processing Failed",
-            description: "Failed to process the file. Please try again.",
-            variant: "destructive",
+            title: "Success!",
+            description: "Text extracted successfully.",
           });
+        } else {
+          throw new Error("No extracted text in response");
         }
       }
     } catch (error) {
       console.error("Error processing file:", error);
       toast({
         title: "Processing Failed",
-        description: "Failed to process the file. Please try again.",
+        description: error.message || "Failed to process the file. Please try again.",
         variant: "destructive",
       });
     }
