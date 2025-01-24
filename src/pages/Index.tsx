@@ -1,8 +1,6 @@
 import { useState } from "react";
 import { FileUpload } from "@/components/FileUpload";
-import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Select,
@@ -14,7 +12,7 @@ import {
 
 const Index = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
+  // const [isProcessing, setIsProcessing] = useState(false);
   const [isUploaded, setIsUploaded] = useState(false);
   const [fileId, setFileId] = useState<string>("");
   const [fileUrl, setFileUrl] = useState<string>("");
