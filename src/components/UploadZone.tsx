@@ -66,10 +66,13 @@ export const UploadZone = ({ onDrop, uploadState, selectedFile, isDragActive }: 
           ) : (
             <>
               <p className="text-lg font-medium text-gray-700">
-                Drop your file here
+                Drop your report file here
               </p>
               <p className="text-sm text-gray-500">
-                Accepts PDF, JPEG, and PNG files (max 5MB)
+                Accepts PDF files (max 5MB)
+              </p>
+              <p className="text-sm text-gray-500">
+                More coming soon...
               </p>
             </>
           )}

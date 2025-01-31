@@ -25,6 +25,10 @@ END $$;
 -- Set up RLS policies
 ALTER TABLE public.uploaded_files ENABLE ROW LEVEL SECURITY;
 
+-- Drop existing policies if they exist
+DROP POLICY IF EXISTS "Allow public insert" ON public.uploaded_files;
+DROP POLICY IF EXISTS "Allow public read access" ON public.uploaded_files;
+
 CREATE POLICY "Allow public insert" ON public.uploaded_files
     FOR INSERT TO anon
     WITH CHECK (true);
@@ -38,20 +42,15 @@ ALTER TABLE ONLY public.uploaded_files
     ADD CONSTRAINT uploaded_files_pkey PRIMARY KEY (id);
 
 -- Set up storage bucket policies
-BEGIN;
-  -- Policy to allow public read access to files
-  INSERT INTO storage.policies (name, definition, bucket_id)
-  VALUES (
-    'Public Read Access',
-    '{"statement": {"effect": "allow", "actions": ["select"], "principal": {"id": "*"}, "resource": ["temp_pdfs/*"]}}',
-    'temp_pdfs'
-  );
+DROP POLICY IF EXISTS "Public Read Access" ON storage.objects;
+DROP POLICY IF EXISTS "Allow Uploads" ON storage.objects;
 
-  -- Policy to allow authenticated uploads
-  INSERT INTO storage.policies (name, definition, bucket_id)
-  VALUES (
-    'Allow Uploads',
-    '{"statement": {"effect": "allow", "actions": ["insert"], "principal": {"id": "*"}, "resource": ["temp_pdfs/*"]}}',
-    'temp_pdfs'
-  );
-END;
+CREATE POLICY "Public Read Access"
+ON storage.objects FOR SELECT
+TO public
+USING (bucket_id = 'temp_pdfs');
+
+CREATE POLICY "Allow Uploads"
+ON storage.objects FOR INSERT
+TO public
+WITH CHECK (bucket_id = 'temp_pdfs');
