@@ -11,9 +11,16 @@ CREATE TABLE public.uploaded_files (
     created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- Set up storage
-INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-VALUES ('temp_pdfs', 'temp_pdfs', true, 52428800, '{application/pdf,image/jpeg,image/png}');
+-- Set up storage (only if bucket doesn't exist)
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM storage.buckets WHERE id = 'temp_pdfs'
+    ) THEN
+        INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+        VALUES ('temp_pdfs', 'temp_pdfs', true, 52428800, '{application/pdf,image/jpeg,image/png}');
+    END IF;
+END $$;
 
 -- Set up RLS policies
 ALTER TABLE public.uploaded_files ENABLE ROW LEVEL SECURITY;
