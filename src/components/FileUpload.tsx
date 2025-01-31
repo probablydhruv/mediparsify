@@ -4,7 +4,13 @@ import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import { UploadZone } from "./UploadZone";
 import { validateFile, uploadFileToSupabase } from "@/utils/fileUtils";
-import type { FileUploadProps } from "@/types/file";
+// import type { FileUploadProps } from "@/types/file";
+
+export interface FileUploadProps {
+  onFileSelect: (file: File | null) => void;
+  onUploadSuccess: (fileId: string) => void;
+  onReset: () => void;
+}
 
 export const FileUpload = ({ onFileSelect, onUploadSuccess, onReset }: FileUploadProps) => {
   const [uploadState, setUploadState] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');

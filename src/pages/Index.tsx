@@ -118,8 +118,11 @@ const Index = () => {
       <div className="max-w-3xl mx-auto space-y-8 animate-fade-in">
         <div className="text-center space-y-2">
           <h1 className="text-3xl md:text-4xl font-bold text-gray-900">
-            MediParsify - The MediScanner of the Future
+            MediParsify
           </h1>
+          <h2 className="text-xl md:text-xl text-gray-900">
+            MediScanner of the future
+          </h2>
           <p className="text-gray-600">
             Upload your Report file to extract text in the language of your choice.
           </p>
