@@ -9,7 +9,8 @@
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",
-    "supabase": "npx supabase start"
+    "supabase:up": "npx supabase start",
+    "supabase:function": "npx supabase functions serve --env-file ./supabase/functions/.env --no-verify-jwt"
   },
   "dependencies": {
     "@radix-ui/react-progress": "^1.1.0",

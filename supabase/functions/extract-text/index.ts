@@ -1,15 +1,11 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { 
   TextractClient, 
   StartDocumentTextDetectionCommand,
   GetDocumentTextDetectionCommand
 } from "npm:@aws-sdk/client-textract";
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { TranslateClient, TranslateTextCommand } from "npm:@aws-sdk/client-translate";
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { corsHeaders } from "../_shared/cors";
 
 const textractClient = new TextractClient({
   region: "us-east-1",
@@ -89,10 +85,11 @@ async function translateText(text: string, targetLanguage: string): Promise<stri
   }
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response('ok', { headers: corsHeaders })
+
   }
 
   try {
