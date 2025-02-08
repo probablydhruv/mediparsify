@@ -1,16 +1,15 @@
 import React from "react";
 import { useDropzone } from "react-dropzone";
-import { Upload, File, Image, X, CheckCircle2, Loader2 } from "lucide-react";
+import { Upload, File as FileIcon, Image, X, CheckCircle2, Loader2 } from "lucide-react";
 import { cn } from "@/utils/twUtils";
 
 interface UploadZoneProps {
   onDrop: (files: File[]) => void;
   uploadState: 'idle' | 'uploading' | 'success' | 'error';
   selectedFile: File | null;
-  isDragActive: boolean;
 }
 
-export const UploadZone = ({ onDrop, uploadState, selectedFile, isDragActive }: UploadZoneProps) => {
+export const UploadZone = ({ onDrop, uploadState, selectedFile }: UploadZoneProps) => {
   const { getRootProps, getInputProps } = useDropzone({
     onDrop,
     accept: {
@@ -22,7 +21,7 @@ export const UploadZone = ({ onDrop, uploadState, selectedFile, isDragActive }: 
   const getFileIcon = () => {
     if (!selectedFile) return <Upload className="w-12 h-12 text-gray-400" />;
     if (selectedFile.type === 'application/pdf') {
-      return <File className="w-12 h-12 text-medical-bright" />;
+      return <FileIcon className="w-12 h-12 text-medical-bright" />;
     }
     return <Image className="w-12 h-12 text-medical-bright" />;
   };
@@ -33,7 +32,6 @@ export const UploadZone = ({ onDrop, uploadState, selectedFile, isDragActive }: 
       className={cn(
         "w-full p-8 border-2 border-dashed rounded-lg transition-all duration-200 cursor-pointer",
         "hover:border-medical-sky hover:bg-medical-soft/10",
-        isDragActive ? "border-medical-bright bg-medical-soft/20" : "border-gray-300",
         uploadState === 'error' && "border-red-500 bg-red-50",
         uploadState === 'success' && "border-green-500 bg-green-50",
         "animate-fade-in"
@@ -68,9 +66,6 @@ export const UploadZone = ({ onDrop, uploadState, selectedFile, isDragActive }: 
               </p>
               <p className="text-sm text-gray-500">
                 Accepts PDF files (max 3MB)
-              </p>
-              <p className="text-sm text-gray-500">
-                More coming soon...
               </p>
             </>
           )}
