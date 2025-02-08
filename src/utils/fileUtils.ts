@@ -1,7 +1,7 @@
 export const validateFile = (file: File): { isValid: boolean; error?: string } => {
-  const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png'];
+  const allowedTypes = ['application/pdf'];
   if (!allowedTypes.includes(file.type)) {
-    return { isValid: false, error: "Only PDF, JPEG, and PNG files are allowed" };
+    return { isValid: false, error: "Only PDF files are allowed temporarily" };
   }
   if (file.size > 5 * 1024 * 1024) {
     return { isValid: false, error: "Maximum file size is 5MB" };

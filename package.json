@@ -8,7 +8,8 @@
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "supabase": "npx supabase start"
   },
   "dependencies": {
     "@radix-ui/react-progress": "^1.1.0",

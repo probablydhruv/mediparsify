@@ -2,8 +2,8 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
-const SUPABASE_URL = import.meta.env.DEV? "http://127.0.0.1:54321" : "https://ihfpfynyqudocyxijfiw.supabase.co";
-const SUPABASE_PUBLISHABLE_KEY = import.meta.env.DEV? "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" : "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImloZnBmeW55cXVkb2N5eGlqZml3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzc0NjE1ODIsImV4cCI6MjA1MzAzNzU4Mn0.6yhON50fpmDS-Xao03LG4QOp0He16t0k5jesncYA3h4";
+const SUPABASE_URL = import.meta.env.DEV? "http://127.0.0.1:54321" : (import.meta.env.VITE_SUPABASE_URL);
+const SUPABASE_PUBLISHABLE_KEY = import.meta.env.DEV? "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0" : (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY);
 
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";

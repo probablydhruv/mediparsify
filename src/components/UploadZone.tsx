@@ -1,7 +1,7 @@
 import React from "react";
 import { useDropzone } from "react-dropzone";
 import { Upload, File, Image, X, CheckCircle2, Loader2 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/utils/twUtils";
 
 interface UploadZoneProps {
   onDrop: (files: File[]) => void;
@@ -14,9 +14,7 @@ export const UploadZone = ({ onDrop, uploadState, selectedFile, isDragActive }: 
   const { getRootProps, getInputProps } = useDropzone({
     onDrop,
     accept: {
-      'application/pdf': ['.pdf'],
-      'image/jpeg': ['.jpg', '.jpeg'],
-      'image/png': ['.png']
+      'application/pdf': ['.pdf']
     },
     multiple: false,
   });
@@ -69,7 +67,7 @@ export const UploadZone = ({ onDrop, uploadState, selectedFile, isDragActive }: 
                 Drop your report file here
               </p>
               <p className="text-sm text-gray-500">
-                Accepts PDF files (max 5MB)
+                Accepts PDF files (max 3MB)
               </p>
               <p className="text-sm text-gray-500">
                 More coming soon...
