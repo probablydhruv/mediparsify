@@ -1,9 +1,0 @@
-{
-  "name": "extract-text",
-  "version": "1.0.0",
-  "main": "index.ts",
-  "dependencies": {
-    "@aws-sdk/client-textract": "^3.0.0",
-    "@supabase/supabase-js": "^2.7.1"
-  }
-}

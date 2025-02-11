@@ -1,35 +1,27 @@
 import React, { useCallback, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Progress } from "@/components/ui/progress";
-import { supabase } from "@/integrations/supabase/client";
 import { UploadZone } from "./UploadZone";
-import { validateFile, uploadFileToSupabase } from "@/utils/fileUtils";
-// import type { FileUploadProps } from "@/types/file";
+import { validateFile } from "@/utils/fileUtils";
 
 export interface FileUploadProps {
-  onFileSelect: (file: File | null) => void;
-  onUploadSuccess: (fileId: string) => void;
-  onReset: () => void;
+  onUploadSuccess: (file: File | null) => void;
 }
 
-export const FileUpload = ({ onFileSelect, onUploadSuccess, onReset }: FileUploadProps) => {
+export const FileUpload = ({ onUploadSuccess }: FileUploadProps) => {
   const [uploadState, setUploadState] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState<string>("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [isDragActive, setIsDragActive] = useState(false);
   const { toast } = useToast();
 
   const handleUpload = async (file: File) => {
     try {
       setUploadState('uploading');
       setUploadProgress(0);
-      
-      const fileRecord = await uploadFileToSupabase(file, supabase);
-      
       setUploadState('success');
       setUploadProgress(100);
-      onUploadSuccess(fileRecord.id);
+      onUploadSuccess(file);
       toast({
         title: "Upload Successful",
         description: "Your file has been uploaded successfully.",
@@ -57,19 +49,15 @@ export const FileUpload = ({ onFileSelect, onUploadSuccess, onReset }: FileUploa
       setUploadState('error');
       return;
     }
-
     setSelectedFile(file);
-    onFileSelect(file);
     await handleUpload(file);
-  }, [onFileSelect, onUploadSuccess]);
+  }, [onUploadSuccess]);
 
   const handleReset = () => {
     setSelectedFile(null);
     setUploadState('idle');
     setErrorMessage("");
     setUploadProgress(0);
-    onFileSelect(null);
-    onReset();
   };
 
   return (
@@ -78,7 +66,6 @@ export const FileUpload = ({ onFileSelect, onUploadSuccess, onReset }: FileUploa
         onDrop={onDrop}
         uploadState={uploadState}
         selectedFile={selectedFile}
-        isDragActive={isDragActive}
       />
 
       {uploadState === 'uploading' && (

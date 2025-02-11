@@ -9,15 +9,14 @@
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",
-    "supabase": "npx supabase start"
+    "supabase:up": "npx supabase start",
+    "supabase:down": "npx supabase stop",
+    "supabase:functions": "npx supabase functions serve --env-file ./supabase/functions/.env --no-verify-jwt"
   },
   "dependencies": {
     "@radix-ui/react-progress": "^1.1.0",
     "@radix-ui/react-select": "^2.1.1",
     "@radix-ui/react-toast": "^1.2.1",
-    "@supabase/auth-helpers-react": "^0.5.0",
-    "@supabase/auth-ui-react": "^0.4.7",
-    "@supabase/auth-ui-shared": "^0.1.8",
     "@supabase/supabase-js": "^2.48.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -25,6 +24,7 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-dropzone": "^14.3.5",
+    "react-markdown": "^9.0.3",
     "react-router": "^7.1.4",
     "tailwind-merge": "^2.5.2",
     "tailwindcss-animate": "^1.0.7"
@@ -41,7 +41,6 @@
     "eslint-plugin-react-hooks": "^5.1.0-rc.0",
     "eslint-plugin-react-refresh": "^0.4.9",
     "globals": "^15.9.0",
-    "lovable-tagger": "^1.0.19",
     "postcss": "^8.4.47",
     "supabase": "^2.9.6",
     "tailwindcss": "^3.4.11",
