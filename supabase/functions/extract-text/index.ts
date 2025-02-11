@@ -1,173 +1,51 @@
-import { 
-  TextractClient, 
-  StartDocumentTextDetectionCommand,
-  GetDocumentTextDetectionCommand
-} from "npm:@aws-sdk/client-textract";
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { TranslateClient, TranslateTextCommand } from "npm:@aws-sdk/client-translate";
-import { corsHeaders } from "../_shared/cors";
+import OpenAI from "npm:openai";
+import * as pdfjsLib from "npm:pdfjs-dist";
+import { corsHeaders } from "../_shared/cors.ts";
 
-const textractClient = new TextractClient({
-  region: "us-east-1",
-  credentials: {
-    accessKeyId: Deno.env.get('AWS_ACCESS_KEY_ID') || '',
-    secretAccessKey: Deno.env.get('AWS_SECRET_ACCESS_KEY') || '',
-  },
-});
+const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
 
-const translateClient = new TranslateClient({
-  region: "us-east-1",
-  credentials: {
-    accessKeyId: Deno.env.get('AWS_ACCESS_KEY_ID') || '',
-    secretAccessKey: Deno.env.get('AWS_SECRET_ACCESS_KEY') || '',
-  },
-});
-
-async function waitForJobCompletion(jobId: string): Promise<string[]> {
-  console.log(`Waiting for job completion: ${jobId}`);
-  const textBlocks: string[] = [];
-  let nextToken: string | undefined;
-  
-  while (true) {
-    const getCommand = new GetDocumentTextDetectionCommand({
-      JobId: jobId,
-      NextToken: nextToken
-    });
-
-    try {
-      const response = await textractClient.send(getCommand);
-      console.log("Job status:", response.JobStatus);
-
-      if (response.JobStatus === 'SUCCEEDED') {
-        if (response.Blocks) {
-          response.Blocks.forEach(block => {
-            if (block.BlockType === 'LINE' && block.Text) {
-              textBlocks.push(block.Text);
-            }
-          });
-        }
-
-        if (response.NextToken) {
-          nextToken = response.NextToken;
-          continue;
-        }
-        break;
-      } else if (response.JobStatus === 'FAILED') {
-        throw new Error('Textract job failed');
-      }
-
-      // Wait for 2 seconds before checking again
-      await new Promise(resolve => setTimeout(resolve, 2000));
-    } catch (error) {
-      console.error("Error checking job status:", error);
-      throw error;
+async function extractTextFromPDF(pdfBuffer: Uint8Array) {
+    const loadingTask = pdfjsLib.getDocument({ data: pdfBuffer });
+    const pdf = await loadingTask.promise;
+    let textContent = "";
+    for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const text = await page.getTextContent();
+        textContent += text.items.map((item) => item.str).join(" ") + "\n";
     }
-  }
-
-  return textBlocks;
+    return textContent;
 }
 
-async function translateText(text: string, targetLanguage: string): Promise<string> {
-  if (targetLanguage === 'en') return text;
+async function sendToOpenAI(text: string, language: string) {
+    const prompt = `Extract medical test results and interpretations from the given text and format them in ${language}. Follow this format:**Test Name:** <value>\n - **Result:** <value>\n - **Reference Range:** <value>\n - **Interpretation Summary:** <summary>. Keep it concise and to the point.`;
 
-  try {
-    const command = new TranslateTextCommand({
-      Text: text,
-      SourceLanguageCode: 'en',
-      TargetLanguageCode: targetLanguage,
+    const response = await openai.chat.completions.create({
+        model: "gpt-4",
+        messages: [{ role: "system", content: prompt }, { role: "user", content: text }],
     });
-
-    const response = await translateClient.send(command);
-    return response.TranslatedText || text;
-  } catch (error) {
-    console.error("Translation error:", error);
-    return text;
-  }
+    // console.log("hit ", OPENAI_API_KEY);
+    return response.choices[0].message.content;
 }
 
 Deno.serve(async (req) => {
-  // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
-  }
-
-  try {
-    console.log("Processing request...");
     const formData = await req.formData();
-    const file = formData.get('file');
-    const language = formData.get('language')?.toString() || 'en';
-
-    console.log("Received request with language:", language);
+    const file = formData.get("file");
+    const language = formData.get("language") || "English";
+    console.log(language);
 
     if (!file || !(file instanceof File)) {
-      throw new Error('No file provided');
+        return new Response(JSON.stringify({ error: "Invalid file" }), { headers: corsHeaders, status: 400 });
     }
 
-    console.log("File details:", {
-      name: file.name,
-      type: file.type,
-      size: file.size
+    const pdfBuffer = new Uint8Array(await file.arrayBuffer());
+    const extractedText = await extractTextFromPDF(pdfBuffer);
+    const responseText = await sendToOpenAI(extractedText, language);
+
+    return new Response(JSON.stringify({ extractedText: responseText }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-
-    // Convert file to bytes array
-    const buffer = await file.arrayBuffer();
-    const bytes = new Uint8Array(buffer);
-
-    // Start async document detection
-    const startCommand = new StartDocumentTextDetectionCommand({
-      DocumentLocation: {
-        Bytes: bytes
-      }
-    });
-
-    console.log("Starting document text detection...");
-    const startResponse = await textractClient.send(startCommand);
-    
-    if (!startResponse.JobId) {
-      throw new Error('Failed to start text detection job');
-    }
-
-    console.log("Job started with ID:", startResponse.JobId);
-    
-    // Wait for job completion and get text blocks
-    const textBlocks = await waitForJobCompletion(startResponse.JobId);
-    const extractedText = textBlocks.join('\n');
-
-    console.log("Text extraction completed, translating...");
-    
-    // Translate the extracted text if needed
-    const translatedText = await translateText(extractedText, language);
-
-    console.log("Processing completed successfully");
-    
-    return new Response(
-      JSON.stringify({ 
-        extractedText: translatedText,
-        rawText: extractedText // Including raw text for OpenAI processing
-      }),
-      { 
-        headers: { 
-          ...corsHeaders,
-          'Content-Type': 'application/json'
-        } 
-      }
-    );
-
-  } catch (error) {
-    console.error("Error in extract-text function:", error);
-    return new Response(
-      JSON.stringify({ 
-        error: error.message || 'An unexpected error occurred',
-        details: error.toString()
-      }),
-      { 
-        status: 500,
-        headers: { 
-          ...corsHeaders,
-          'Content-Type': 'application/json'
-        } 
-      }
-    );
-  }
 });

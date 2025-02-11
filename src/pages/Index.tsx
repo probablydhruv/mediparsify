@@ -2,6 +2,7 @@ import { useState } from "react";
 import { FileUpload } from "@/components/FileUpload";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import Markdown from 'react-markdown';
 import {
   Select,
   SelectContent,
@@ -11,7 +12,7 @@ import {
 } from "@/components/ui/select";
 
 const Index = () => {
-  const [selectedLanguage, setSelectedLanguage] = useState("en");
+  const [selectedLanguage, setSelectedLanguage] = useState("English");
   const [extractedText, setExtractedText] = useState<string>("");
   const { toast } = useToast();
 
@@ -79,18 +80,18 @@ const Index = () => {
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Select Language" />
                 <SelectContent>
-                  <SelectItem value="en">English</SelectItem>
-                  <SelectItem value="hi">Hindi</SelectItem>
-                  <SelectItem value="bn">Bengali</SelectItem>
-                  <SelectItem value="mr">Marathi</SelectItem>
-                  <SelectItem value="te">Telugu</SelectItem>
-                  <SelectItem value="ta">Tamil</SelectItem>
-                  <SelectItem value="gu">Gujarati</SelectItem>
-                  <SelectItem value="kn">Kannada</SelectItem>
-                  <SelectItem value="or">Odia</SelectItem>
-                  <SelectItem value="ml">Malayalam</SelectItem>
-                  <SelectItem value="pa">Punjabi</SelectItem>
-                  <SelectItem value="as">Assamese</SelectItem>
+                  <SelectItem value="English">English</SelectItem>
+                  <SelectItem value="Hindi">Hindi</SelectItem>
+                  <SelectItem value="Bengali">Bengali</SelectItem>
+                  <SelectItem value="Marathi">Marathi</SelectItem>
+                  <SelectItem value="Telugu">Telugu</SelectItem>
+                  <SelectItem value="Tamil">Tamil</SelectItem>
+                  <SelectItem value="Gujarati">Gujarati</SelectItem>
+                  <SelectItem value="Kannada">Kannada</SelectItem>
+                  <SelectItem value="Idia">Odia</SelectItem>
+                  <SelectItem value="Malyalam">Malayalam</SelectItem>
+                  <SelectItem value="Punjabi">Punjabi</SelectItem>
+                  <SelectItem value="Assamese">Assamese</SelectItem>
                 </SelectContent>
               </SelectTrigger>
             </Select>
@@ -102,16 +103,15 @@ const Index = () => {
 
         {extractedText && (
           <div className="space-y-4">
-
             <div className="bg-white p-4 rounded-md border border-gray-200">
               <pre className="whitespace-pre-wrap font-mono text-sm">
-                {extractedText}
+                <Markdown>{extractedText}</Markdown>
               </pre>
             </div>
           </div>
         )}
-      </div>
-    </div>
+      </div >
+    </div >
   );
 };
 
