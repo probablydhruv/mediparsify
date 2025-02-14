@@ -11,7 +11,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-const Index = () => {
+export default function Component(){
   const [selectedLanguage, setSelectedLanguage] = useState("English");
   const [extractedText, setExtractedText] = useState<string>("");
   const { toast } = useToast();
@@ -63,7 +63,7 @@ const Index = () => {
       <div className="max-w-3xl mx-auto space-y-8 animate-fade-in">
         <div className="text-center space-y-2">
           <h1 className="text-3xl md:text-4xl font-bold text-gray-900">
-            MediParsify
+            TOMO Health
           </h1>
           <p className="text-gray-600">
             Upload your Report file to extract text in the language of your choice.
@@ -114,5 +114,3 @@ const Index = () => {
     </div >
   );
 };
-
-export default Index;
