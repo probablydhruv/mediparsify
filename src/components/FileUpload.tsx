@@ -83,14 +83,13 @@ export const FileUpload = ({ onUploadSuccess }: FileUploadProps) => {
         </p>
       )}
 
-      {(uploadState === 'success' || uploadState === 'error') && ( 
-        <></>
-        // <button
-        //   onClick={handleReset}
-        //   className="text-sm text-gray-500 hover:text-gray-700 transition-colors mx-auto block"
-        // >
-        //   Reset
-        // </button>
+      {(uploadState === 'success' || uploadState === 'error') && (
+        <button
+          onClick={handleReset}
+          className="text-sm text-gray-500 hover:text-gray-700 transition-colors mx-auto block"
+        >
+          Reset
+        </button>
       )}
     </div>
   );

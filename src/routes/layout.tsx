@@ -17,7 +17,7 @@ export default function Component() {
                 </div>
 
             </nav>
-            <div className="pt-20 pb-20 px-4">
+            <div className="pt-20 pb-20 px-4 animate-fade-up">
                 <Outlet />
             </div>
 
@@ -25,7 +25,7 @@ export default function Component() {
             <footer className="bg-muted py-8">
                 <div className="container mx-auto px-4 text-center text-muted-foreground">
                     <hr />
-                    <p>&copy; 2025 TOMOHealth. All rights reserved.</p>
+                    <p>&copy; {new Date().getFullYear()} TOMOHealth. All rights reserved.</p>
                 </div>
             </footer>
         </div>
