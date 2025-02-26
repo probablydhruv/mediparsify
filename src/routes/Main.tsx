@@ -49,12 +49,14 @@ export default function Component() {
         }
       }
     } catch (error: unknown) {
-      console.error("Error processing file:", error);
-      toast({
-        title: "Processing Failed",
-        description: error?.message || "Failed to process the file. Please try again.",
-        variant: "destructive",
-      });
+      if (error instanceof Error) {
+        console.error("Error processing file:", error);
+        toast({
+          title: "Processing Failed",
+          description: error.message || "Failed to process the file. Please try again.",
+          variant: "destructive",
+        });
+      }
     }
   };
 
