@@ -30,11 +30,13 @@
   },
   "devDependencies": {
     "@netlify/functions": "^3.0.0",
+    "@netlify/vite-plugin-react-router": "^1.0.0",
     "@react-router/dev": "^7.1.5",
     "@tailwindcss/vite": "^4.0.0",
     "@types/node": "^20",
     "@types/react": "^19.0.1",
     "@types/react-dom": "^19.0.1",
+    "netlify-cli": "^19.0.0",
     "react-router-devtools": "^1.1.0",
     "supabase": "^2.12.1",
     "tailwindcss": "^4.0.0",
