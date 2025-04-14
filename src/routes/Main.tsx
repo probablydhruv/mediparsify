@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { FileUpload } from "@/components/FileUpload";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
 import Markdown from 'react-markdown';
 import {
   Select,
@@ -10,11 +9,27 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useSubmit } from "react-router";
+import type { Route } from "./+types/Main";
+import { extractTextFromPDF, sendToOpenAI } from "@/utils/backendUtils";
 
-export default function Component() {
+export async function action({
+  request,
+}: Route.ActionArgs) {
+  const formData = await request.formData();
+  let file = formData.get("file") as File;
+  let language = formData.get("language") as string;
+  const pdfBuffer = new Uint8Array(await file?.arrayBuffer());
+  const extractedText = await extractTextFromPDF(pdfBuffer);
+  const responseText = await sendToOpenAI(extractedText, language);
+  return { "success": true, extractedText: "" };
+}
+
+export default function Component({ actionData }: Route.ComponentProps) {
   const [selectedLanguage, setSelectedLanguage] = useState("English");
   const [extractedText, setExtractedText] = useState<string>("");
   const { toast } = useToast();
+  const submit = useSubmit();
 
   const handleUploadSuccess = async (file: File | null) => {
 
@@ -28,24 +43,13 @@ export default function Component() {
         const formData = new FormData();
         formData.append('file', fileBlob, fileData?.name);
         formData.append('language', selectedLanguage);
-        const { data: extractResponse, error: functionError } = await supabase.functions.invoke('extract-text', {
-          body: formData,
-        });
-
-        if (functionError) {
-          console.error("Edge function error:", functionError);
-          throw functionError;
-        }
-
-        console.log("Extract text response:", extractResponse);
-        if (extractResponse?.extractedText) {
-          setExtractedText(extractResponse.extractedText);
+        submit(formData, { method: "post" });
+        if (actionData) {
+          setExtractedText(actionData?.extractedText);
           toast({
             title: "Success!",
             description: "Text extracted successfully.",
           });
-        } else {
-          throw new Error("No extracted text in response");
         }
       }
     } catch (error: unknown) {

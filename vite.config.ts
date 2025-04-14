@@ -6,9 +6,6 @@ import path from "path";
 import netlifyPlugin from "@netlify/vite-plugin-react-router";
 
 export default defineConfig({
-  ssr: {
-    noExternal: ["react-dropzone"],
-  },
   plugins: [tailwindcss(), reactRouter(), tsconfigPaths(), netlifyPlugin()],
   resolve: {
     alias: {

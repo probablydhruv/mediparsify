@@ -7,7 +7,6 @@ import {
   Scripts,
   ScrollRestoration,
 } from "react-router";
-
 import "./app.css";
 import { Toaster } from "@/components/ui/toaster";
 import type { Route } from "./+types/root";
