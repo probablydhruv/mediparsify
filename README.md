@@ -1,6 +1,6 @@
-# Welcome to TOMO.health!
+# Welcome to TOMO.health
 
-Insert tagline and body here 
+Insert tagline and body here
 
 ## Header 2
 
