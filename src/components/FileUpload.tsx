@@ -1,6 +1,5 @@
 import React, { useCallback, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { Progress } from "@/components/ui/progress";
 import { UploadZone } from "./UploadZone";
 import { validateFile } from "@/utils/fileUtils";
 

@@ -1,20 +1,12 @@
 import OpenAI from "openai";
-// import { getDocument } from "pdfjs-dist";
-// import { pdfjs } from "pdfjs-dist";
-// import "pdfjs-dist/build/pdf.worker.entry"; // Important!
+import { extractText, getDocumentProxy } from "unpdf";
 
 const openai = new OpenAI({ apiKey: import.meta.env.VITE_OPENAI_API_KEY });
 
 export async function extractTextFromPDF(pdfBuffer: Uint8Array) {
-	const loadingTask = pdfjs.getDocument({ data: pdfBuffer });
-	const pdf = await loadingTask.promise;
-	let textContent = "";
-	for (let i = 1; i <= pdf.numPages; i++) {
-		const page = await pdf.getPage(i);
-		const text = await page.getTextContent();
-		textContent += text.items.map((item: any) => item.str).join(" ") + "\n";
-	}
-	return textContent;
+	const pdf = await getDocumentProxy(pdfBuffer);
+	const { text } = await extractText(pdf, { mergePages: true })
+	return text;
 }
 
 export async function sendToOpenAI(text: string, language: string) {
