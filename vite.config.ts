@@ -5,11 +5,18 @@ import tsconfigPaths from "vite-tsconfig-paths";
 import path from "path";
 import netlifyPlugin from "@netlify/vite-plugin-react-router";
 
-export default defineConfig({
+export default defineConfig(({ isSsrBuild }) => ({
+  build: {
+    rollupOptions: isSsrBuild
+      ? {
+        input: "./server/app.ts",
+      }
+      : undefined,
+  },
   plugins: [tailwindcss(), reactRouter(), tsconfigPaths(), netlifyPlugin()],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
   },
-});
+}));
