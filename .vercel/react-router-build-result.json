@@ -66,8 +66,10 @@
     "basename": "/",
     "buildDirectory": "/Users/akshatr/tomoHealth/build",
     "future": {
+      "unstable_middleware": false,
       "unstable_optimizeDeps": false,
       "unstable_splitRouteModules": false,
+      "unstable_subResourceIntegrity": false,
       "unstable_viteEnvironmentApi": false
     },
     "routes": {
