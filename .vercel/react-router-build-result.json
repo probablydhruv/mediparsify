@@ -1,0 +1,118 @@
+{
+  "buildManifest": {
+    "serverBundles": {
+      "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0": {
+        "id": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
+        "file": "build/server/nodejs_eyJydW50aW1lIjoibm9kZWpzIn0/index.js",
+        "config": {
+          "runtime": "nodejs"
+        }
+      }
+    },
+    "routeIdToServerBundleId": {
+      "root": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/Index": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/About": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/Main": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/NotFound": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0"
+    },
+    "routes": {
+      "root": {
+        "path": "",
+        "id": "root",
+        "file": "src/root.tsx",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/layout": {
+        "id": "routes/layout",
+        "parentId": "root",
+        "file": "src/routes/layout.tsx",
+        "config": {}
+      },
+      "routes/Index": {
+        "id": "routes/Index",
+        "parentId": "routes/layout",
+        "file": "src/routes/Index.tsx",
+        "index": true,
+        "config": {}
+      },
+      "routes/About": {
+        "id": "routes/About",
+        "parentId": "routes/layout",
+        "file": "src/routes/About.tsx",
+        "path": "/about",
+        "config": {}
+      },
+      "routes/Main": {
+        "id": "routes/Main",
+        "parentId": "routes/layout",
+        "file": "src/routes/Main.tsx",
+        "path": "/app",
+        "config": {}
+      },
+      "routes/NotFound": {
+        "id": "routes/NotFound",
+        "parentId": "routes/layout",
+        "file": "src/routes/NotFound.tsx",
+        "path": "*?",
+        "config": {}
+      }
+    }
+  },
+  "reactRouterConfig": {
+    "appDirectory": "/Users/akshatr/tomoHealth/src",
+    "basename": "/",
+    "buildDirectory": "/Users/akshatr/tomoHealth/build",
+    "future": {
+      "unstable_optimizeDeps": false,
+      "unstable_splitRouteModules": false,
+      "unstable_viteEnvironmentApi": false
+    },
+    "routes": {
+      "root": {
+        "path": "",
+        "id": "root",
+        "file": "root.tsx"
+      },
+      "routes/layout": {
+        "id": "routes/layout",
+        "parentId": "root",
+        "file": "routes/layout.tsx"
+      },
+      "routes/Index": {
+        "id": "routes/Index",
+        "parentId": "routes/layout",
+        "file": "routes/Index.tsx",
+        "index": true
+      },
+      "routes/About": {
+        "id": "routes/About",
+        "parentId": "routes/layout",
+        "file": "routes/About.tsx",
+        "path": "/about"
+      },
+      "routes/Main": {
+        "id": "routes/Main",
+        "parentId": "routes/layout",
+        "file": "routes/Main.tsx",
+        "path": "/app"
+      },
+      "routes/NotFound": {
+        "id": "routes/NotFound",
+        "parentId": "routes/layout",
+        "file": "routes/NotFound.tsx",
+        "path": "*?"
+      }
+    },
+    "serverBuildFile": "index.js",
+    "serverModuleFormat": "esm",
+    "ssr": true
+  },
+  "viteConfig": {
+    "build": {
+      "assetsDir": "assets"
+    }
+  }
+}

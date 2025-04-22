@@ -3,17 +3,12 @@ import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
 import path from "path";
-import netlifyPlugin from "@netlify/vite-plugin-react-router";
 
-export default defineConfig(({ isSsrBuild }) => ({
-  build: {
-    rollupOptions: isSsrBuild
-      ? {
-        input: "./server/app.ts",
-      }
-      : undefined,
+export default defineConfig(({ command }) => ({
+  ssr: {
+    noExternal: command === "build" ? true : undefined,
   },
-  plugins: [tailwindcss(), reactRouter(), tsconfigPaths(), netlifyPlugin()],
+  plugins: [tailwindcss(), reactRouter(), tsconfigPaths()],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
