@@ -6,6 +6,6 @@ export default [
         index("routes/Index.tsx"),
         route("/about", "routes/About.tsx"),
         route("/app", "routes/Main.tsx"),
-        route("*?", "routes/NotFound.tsx"),
+        route("*", "routes/NotFound.tsx"),
     ]),
 ] satisfies RouteConfig;
