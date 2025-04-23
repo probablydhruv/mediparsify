@@ -7,7 +7,6 @@ import {
   Scripts,
   ScrollRestoration,
 } from "react-router";
-
 import "./app.css";
 import { Toaster } from "@/components/ui/toaster";
 import type { Route } from "./+types/root";
@@ -46,25 +45,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
-    // <div className="min-h-screen bg-white p-4 md:p-8">
-    //   <div className="max-w-3xl mx-auto space-y-8 animate-fade-in">
-    //     <div className="text-center space-y-2">
-    //       <h1 className="text-3xl md:text-4xl font-bold text-gray-900">
-    //         TOMO Health
-    //       </h1>
-    //       <p className="text-gray-600">
-    //         Upload your Report file to extract text in the language of your choice.
-    //       </p>
-    //       <div className="gap-2">
-    //         <NavLink to="/">Home</NavLink>
-    //         <NavLink to="/about">About</NavLink>
-    //         <NavLink to="/app">App</NavLink>
-    //       </div>
-    //     </div>
-    //     <Toaster />
-    //   </div>
-    // </div>
-    <Outlet />
+    <>
+      <Toaster />
+      <Outlet />
+    </>
   );
 }
 

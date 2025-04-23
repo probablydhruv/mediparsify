@@ -1,24 +1,16 @@
-import OpenAI from "npm:openai";
-import * as pdfjsLib from "npm:pdfjs-dist";
-import { corsHeaders } from "../_shared/cors.ts";
+import OpenAI from "openai";
+import { extractText, getDocumentProxy } from "unpdf";
 
-const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
-const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
+const openai = new OpenAI({ apiKey: import.meta.env.VITE_OPENAI_API_KEY });
 
-async function extractTextFromPDF(pdfBuffer: Uint8Array) {
-    const loadingTask = pdfjsLib.getDocument({ data: pdfBuffer });
-    const pdf = await loadingTask.promise;
-    let textContent = "";
-    for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const text = await page.getTextContent();
-        textContent += text.items.map((item) => item.str).join(" ") + "\n";
-    }
-    return textContent;
+export async function extractTextFromPDF(pdfBuffer: Uint8Array) {
+	const pdf = await getDocumentProxy(pdfBuffer);
+	const { text } = await extractText(pdf, { mergePages: true })
+	return text;
 }
 
-async function sendToOpenAI(text: string, language: string) {
-    const prompt = `You are a medical report analyzer specializing in making complex medical information accessible and actionable for patients. Your task is to analyze the provided medical report and present it in a clear, empathetic, and informative way.
+export async function sendToOpenAI(text: string, language: string) {
+	const prompt = `You are a medical report analyzer specializing in making complex medical information accessible and actionable for patients. Your task is to analyze the provided medical report and present it in a clear, empathetic, and informative way.
 Use these indicators throughout your analysis: 🟢 for normal/good findings 🟡 for items that need monitoring 🟠 for items requiring attention ❤️ for positive health indicators ⚕️ for medical recommendations
 Structure your response in the following way:
 First, provide a "Quick Summary" section. In 3-4 sentences, explain the main findings of the report in simple language. Focus on what the patient needs to know immediately.
@@ -53,32 +45,9 @@ Remember to:
 End with a "Good News Highlight" section that reinforces positive findings and improvements, giving the patient confidence and optimism while remaining realistic.
 Keep your tone professional yet friendly, authoritative yet approachable, and informative yet reassuring. Your goal is to help patients understand their health status and feel empowered to take appropriate action.`;
 
-    const response = await openai.chat.completions.create({
-        model: "gpt-4",
-        messages: [{ role: "system", content: prompt }, { role: "user", content: text }],
-    });
-    // console.log("hit ", OPENAI_API_KEY);
-    return response.choices[0].message.content;
+	const response = await openai.chat.completions.create({
+		model: "gpt-4",
+		messages: [{ role: "system", content: prompt }, { role: "user", content: text }],
+	});
+	return response.choices[0].message.content;
 }
-
-Deno.serve(async (req) => {
-    if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
-
-    const formData = await req.formData();
-    const file = formData.get("file");
-    const language = formData.get("language") || "English";
-    console.log(language);
-
-    if (!file || !(file instanceof File)) {
-        return new Response(JSON.stringify({ error: "Invalid file" }), { headers: corsHeaders, status: 400 });
-    }
-
-    const pdfBuffer = new Uint8Array(await file.arrayBuffer());
-    const extractedText = await extractTextFromPDF(pdfBuffer);
-    const responseText = await sendToOpenAI(extractedText, language);
-
-    return new Response(JSON.stringify({ extractedText: responseText }), {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-});

@@ -9,7 +9,7 @@ export default function Component() {
             {/* Hero Section */}
             <section>
                 <div className="container mx-auto text-center">
-                    <div className="max-w-3xl mx-auto animate-fade-up">
+                    <div className="max-w-3xl mx-auto">
                         <span className="px-3 py-1 rounded-full bg-primary/10 text-primary text-sm font-medium inline-block mb-4">
                             Simplifying Healthcare Understanding
                         </span>
@@ -21,9 +21,6 @@ export default function Component() {
                             Transform complex medical jargon into clear, actionable insights.
                             Access your complete health history in one secure place.
                         </p>
-                        <Button size="lg" className="animate-fade-in">
-                            Start Your Health Journey
-                        </Button>
                     </div>
                 </div>
             </section>
@@ -65,7 +62,7 @@ export default function Component() {
                 </div>
             </section>
             {/* CTA Section */}
-            <section className="py-10">
+            <section className="pt-10 pb-2">
                 <div className="container mx-auto px-4 text-center">
                     <div className="max-w-2xl mx-auto">
                         <Sparkles className="w-12 h-12 text-primary mx-auto mb-6" />

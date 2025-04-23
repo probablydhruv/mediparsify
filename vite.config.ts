@@ -4,9 +4,9 @@ import { defineConfig } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
 import path from "path";
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   ssr: {
-    noExternal: ["react-dropzone"],
+    noExternal: command === "build" ? true : undefined,
   },
   plugins: [tailwindcss(), reactRouter(), tsconfigPaths()],
   resolve: {
@@ -14,4 +14,4 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
-});
+}));

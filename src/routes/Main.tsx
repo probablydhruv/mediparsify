@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { FileUpload } from "@/components/FileUpload";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
 import Markdown from 'react-markdown';
 import {
   Select,
@@ -10,11 +9,29 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useSubmit } from "react-router";
+import type { Route } from "./+types/Main";
+import { extractTextFromPDF, sendToOpenAI } from "@/utils/backendUtils";
+import { Spinner } from "@/components/ui/spinner";
 
-export default function Component() {
+export async function action({
+  request,
+}: Route.ActionArgs) {
+  const formData = await request.formData();
+  let file = formData.get("file") as File;
+  let language = formData.get("language") as string;
+  const pdfBuffer = new Uint8Array(await file?.arrayBuffer());
+  const textContent = await extractTextFromPDF(pdfBuffer);
+  const responseText = await sendToOpenAI(textContent, language);
+  return { "success": true, extractedText: responseText };
+}
+
+export default function Component({ actionData }: Route.ComponentProps) {
   const [selectedLanguage, setSelectedLanguage] = useState("English");
-  const [extractedText, setExtractedText] = useState<string>("");
+  const [loading, setLoading] = useState<boolean>(false);
   const { toast } = useToast();
+  const submit = useSubmit();
+  const data = actionData?.extractedText;
 
   const handleUploadSuccess = async (file: File | null) => {
 
@@ -28,33 +45,18 @@ export default function Component() {
         const formData = new FormData();
         formData.append('file', fileBlob, fileData?.name);
         formData.append('language', selectedLanguage);
-        const { data: extractResponse, error: functionError } = await supabase.functions.invoke('extract-text', {
-          body: formData,
-        });
-
-        if (functionError) {
-          console.error("Edge function error:", functionError);
-          throw functionError;
-        }
-
-        console.log("Extract text response:", extractResponse);
-        if (extractResponse?.extractedText) {
-          setExtractedText(extractResponse.extractedText);
-          toast({
-            title: "Success!",
-            description: "Text extracted successfully.",
-          });
-        } else {
-          throw new Error("No extracted text in response");
-        }
+        submit(formData, { method: "post", encType: "multipart/form-data" });
+        setLoading(true);
       }
     } catch (error: unknown) {
-      console.error("Error processing file:", error);
-      toast({
-        title: "Processing Failed",
-        description: error?.message || "Failed to process the file. Please try again.",
-        variant: "destructive",
-      });
+      if (error instanceof Error) {
+        console.error("Error processing file:", error);
+        toast({
+          title: "Processing Failed",
+          description: error.message || "Failed to process the file. Please try again.",
+          variant: "destructive",
+        });
+      }
     }
   };
 
@@ -88,23 +90,16 @@ export default function Component() {
         </div>
       </div>
 
-      {!extractedText && <FileUpload onUploadSuccess={handleUploadSuccess} />}
-      {extractedText && (
-        <>
-          <button
-            onClick={() => { setExtractedText("") }}
-            className="text-md hover:text-gray-700 transition-colors rounded-md mx-auto block"
-          >
-            Reset
-          </button>
-          <div className="space-y-4">
-            <div className="bg-white p-4 rounded-md border border-gray-200">
-              <pre className="whitespace-pre-wrap font-mono text-sm">
-                <Markdown>{extractedText}</Markdown>
-              </pre>
-            </div>
+      <FileUpload onUploadSuccess={handleUploadSuccess} />
+      {loading && !data ? <Spinner size="small" /> : null}
+      {data && (
+        <div className="space-y-4">
+          <div className="bg-white p-4 rounded-md border border-gray-200">
+            <pre className="whitespace-pre-wrap font-mono text-sm">
+              <Markdown>{data}</Markdown>
+            </pre>
           </div>
-        </>
+        </div>
       )}
     </>
   );
